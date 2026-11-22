@@ -5,6 +5,7 @@
 - `JWT_SECRET`: random secret with at least 32 characters.
 - `ADMIN_BOOTSTRAP_TOKEN`: one-time first-admin setup secret with at least 32 characters.
 - `WEB_ORIGIN`: exact HTTPS origin of the deployed storefront.
+- `SMTP_HOST`, `SMTP_PORT` (default 587), `SMTP_SECURE` (`true` for implicit TLS), `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`: required for real email OTP delivery.
 - `NODE_ENV=production`.
 
 ## Database release
@@ -26,7 +27,7 @@ The initial migration is in `prisma/migrations/20261122090000_init`. It creates 
 4. Remove `ADMIN_BOOTSTRAP_TOKEN` from the service environment after the first administrator is created.
 
 ## OTP production gate
-The API intentionally does not deliver OTP messages yet. Production OTP remains disabled until an actual SMS or SMTP delivery adapter is implemented and tested. Merely setting provider environment variables does not enable delivery.
+Email OTP is delivered through SMTP when all SMTP variables above are configured. SMS OTP remains disabled until a provider-specific adapter is implemented. Test SMTP delivery before enabling customer sign-in.
 
 ## Release safety
 Do not point the storefront at the API until CI passes, a hosted PostgreSQL database is provisioned, migrations have been applied, and the health endpoint returns `ok: true`.
