@@ -10,7 +10,7 @@ type D1Statement = {
   first<T = Record<string, unknown>>(): Promise<T | null>;
   run(): Promise<D1Result>;
 };
-type D1Database = { prepare(query: string): D1Statement };
+type D1Database = { prepare(query: string): D1Statement; batch<T = Record<string, unknown>>(statements: D1Statement[]): Promise<D1Result<T>[]> };
 type Env = {
   DB: D1Database;
   JWT_SECRET: string;
@@ -137,6 +137,63 @@ app.post('/api/admin/bootstrap',async c=>{
   if(result.results?.length)return c.json({ok:true,user:result.results[0],message:'مدیر اصلی با موفقیت فعال شد.'});
   return fail(c,404,'ابتدا با همین ایمیل یا شماره موبایل ثبت‌نام و آن را تأیید کنید');
 });
+
+async function requireUser(c:any,next:any){
+  try {
+    const token=(c.req.header('Authorization')||'').replace(/^Bearer\\s+/i,'');
+    if(!token)return fail(c,401,'ابتدا وارد حساب کاربری شوید');
+    const {payload}=await jwtVerify(token,enc.encode(c.env.JWT_SECRET));
+    if(!payload.sub)return fail(c,401,'نشست معتبر نیست');
+    const user=await stmt(c,'SELECT id,role FROM User WHERE id=?',payload.sub).first<any>();
+    if(!user)return fail(c,401,'حساب کاربری پیدا نشد');
+    c.set('user',user); await next();
+  } catch { return fail(c,401,'ابتدا وارد حساب کاربری شوید'); }
+}
+app.post('/api/orders',requireUser,async c=>{
+  const parsed=z.object({
+    items:z.array(z.object({productId:z.string().min(1),quantity:z.number().int().min(1).max(1000)})).min(1).max(50),
+    address:z.object({name:z.string().trim().min(2).max(120),phone:z.string().trim().min(8).max(20),province:z.string().trim().min(2).max(80),city:z.string().trim().min(2).max(80),details:z.string().trim().min(5).max(500),postalCode:z.string().trim().max(20).optional()}),
+    note:z.string().max(1000).optional()
+  }).safeParse(await c.req.json().catch(()=>null));
+  if(!parsed.success)return c.json({ok:false,message:'اطلاعات سفارش معتبر نیست',errors:parsed.error.flatten()},400);
+  const key=(c.req.header('Idempotency-Key')||'').trim();
+  if(!/^[A-Za-z0-9._:-]{12,128}$/.test(key))return fail(c,400,'شناسه یکتای سفارش معتبر نیست');
+  const user=c.get('user') as {id:string};
+  const idempotencyKey=user.id+':'+key;
+  const existing=await stmt(c,'SELECT id,status,totalToman,createdAt FROM "Order" WHERE idempotencyKey=?',idempotencyKey).first<any>();
+  if(existing)return c.json({ok:true,replayed:true,order:existing});
+  const ids=[...new Set(parsed.data.items.map(x=>x.productId))];
+  if(ids.length!==parsed.data.items.length)return fail(c,400,'هر کالا فقط باید یک‌بار در فهرست سفارش باشد');
+  const placeholders=ids.map(()=>'?').join(',');
+  const products=await stmt(c,`SELECT id,name,sku,priceToman,stock,isPublished FROM Product WHERE id IN (${placeholders})`,...ids).all<any>();
+  if(products.results.length!==ids.length)return fail(c,400,'یک یا چند کالا پیدا نشد');
+  const byId=new Map(products.results.map((p:any)=>[p.id,p]));
+  let total=0n;
+  const orderId=crypto.randomUUID(), created=now();
+  const orderItems=parsed.data.items.map(item=>{
+    const p:any=byId.get(item.productId);
+    if(!p.isPublished)throw new Error('PRODUCT_UNAVAILABLE');
+    if(p.priceToman===null||p.priceToman===undefined)throw new Error('PRICE_UNAVAILABLE');
+    if(Number(p.stock)<item.quantity)throw new Error('INSUFFICIENT_STOCK');
+    const price=BigInt(String(p.priceToman)); total+=price*BigInt(item.quantity);
+    return {id:crypto.randomUUID(),productId:p.id,quantity:item.quantity,unitPriceToman:String(price)};
+  });
+  const statements=[
+    stmt(c,'INSERT INTO "Order"(id,userId,status,totalToman,address,note,createdAt,idempotencyKey) VALUES(?,?,\'PENDING\',?,?,?,?,?)',orderId,user.id,String(total),JSON.stringify(parsed.data.address),parsed.data.note||null,created,idempotencyKey),
+    ...orderItems.map(item=>stmt(c,'INSERT INTO OrderItem(id,orderId,productId,quantity,unitPriceToman) VALUES(?,?,?,?,?)',item.id,orderId,item.productId,item.quantity,item.unitPriceToman))
+  ];
+  try {
+    await c.env.DB.batch(statements);
+    return c.json({ok:true,replayed:false,order:{id:orderId,status:'PENDING',totalToman:String(total),createdAt:created}},201);
+  } catch(e) {
+    const replay=await stmt(c,'SELECT id,status,totalToman,createdAt FROM "Order" WHERE idempotencyKey=?',idempotencyKey).first<any>();
+    if(replay)return c.json({ok:true,replayed:true,order:replay});
+    const message=String(e);
+    if(message.includes('INSUFFICIENT_STOCK'))return fail(c,409,'موجودی یکی از کالاها کافی نیست');
+    return fail(c,409,'ثبت سفارش انجام نشد؛ موجودی یا قیمت کالاها را دوباره بررسی کنید');
+  }
+});
+
 app.use('/api/admin/*',requireAdmin);
 app.get('/api/admin/summary',async c=>{
   const row=await stmt(c,`SELECT (SELECT COUNT(*) FROM User) AS users,(SELECT COUNT(*) FROM "Order") AS orders,(SELECT COUNT(*) FROM "Order" WHERE status='PENDING') AS pendingOrders,(SELECT COALESCE(SUM(totalToman),0) FROM "Order" WHERE status IN ('PAID','PROCESSING','SHIPPED','COMPLETED')) AS paidTotalToman`).first<any>();
