@@ -9,10 +9,10 @@ This project must remain on free tiers. No paid Render, Koyeb, or database resou
 | Storefront | Cloudflare Pages | Static files in `docs/`; `.pages.dev` hostname |
 | API runtime | Cloudflare Workers Free | 100,000 requests/day; 10 ms CPU time per invocation |
 | PostgreSQL | Neon Free | 1 GB per project and 100 compute-hours/month; compute scales to zero |
-| Email OTP | Resend Free | 3,000 emails/month, 100/day; sender domain verification required |
+| Email OTP | Brevo Free | 3,000 emails/month, 100/day; sender domain verification required |
 | Source and CI | GitHub Free | Repository and automated tests |
 
-Cloudflare Workers Free is available without a credit card. Neon and Resend have free plans, subject to their quotas and account verification requirements.
+Cloudflare Workers Free is available without a credit card. Neon and Brevo have free plans, subject to their quotas and account verification requirements.
 
 ## Important deployment decision
 
@@ -55,16 +55,16 @@ The Worker implementation is a separate deployment target. It must:
 - Use Neon serverless HTTPS queries, not a long-lived TCP connection.
 - Validate every request and keep secrets in Worker secrets.
 - Use Web Crypto for OTP hashing and JWT signing/verification.
-- Send OTP through Resend's HTTPS API (not SMTP).
+- Send OTP through Brevo's HTTPS API (not SMTP).
 - Keep the existing PostgreSQL tables and migrations compatible.
 
 Cloudflare Workers Free currently allows 100,000 requests/day and 10 ms CPU time per invocation. Design expensive operations (especially spreadsheet parsing) outside the request CPU budget or retain them as a controlled administrative import process.
 
 ## 4. Email OTP — Resend Free
 
-Resend's free tier currently allows 3,000 transactional emails/month and 100/day. Verify a sender domain before enabling customer OTP delivery. Configure only these secrets in the Worker:
-- `RESEND_API_KEY`
-- `RESEND_FROM`
+Resend's free tier currently allows 300 transactional emails/day. Verify the sender email in Brevo before enabling customer OTP delivery. Brevo may rewrite free-mail sender addresses; a custom domain improves deliverability but is not a prerequisite for the first test. Configure only these secrets in the Worker:
+- `BREVO_API_KEY`
+- `BREVO_SENDER_EMAIL`
 
 SMS OTP remains disabled until a genuinely free provider and a secure provider-specific adapter are selected.
 
