@@ -8,6 +8,7 @@
 - `apps/worker/migrations/`: مهاجرت‌های Cloudflare D1
 - `apps/api/`: پیاده‌سازی اولیه Express/Prisma برای توسعه محلی و مرجع مدل داده
 - `docs/product-import-template.csv`: قالب ورود گروهی کالا (فقط سرستون‌ها؛ بدون قیمت و موجودی ساختگی)
+- `docs/product-import-guide.html`: راهنمای فارسی ستون‌ها، دسته‌بندی‌ها و قواعد واردسازی کالا
 
 ## معماری میزبانی رایگان
 - Frontend: Cloudflare Pages
