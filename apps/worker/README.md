@@ -1,36 +1,22 @@
 # AVGOON Cloudflare Worker API
 
-This is the zero-cost edge deployment adapter for the existing PostgreSQL schema.
+Runtime: Cloudflare Workers + Cloudflare D1 (SQLite). No Neon, PostgreSQL, or paid database dependency.
 
-## Status
+## D1 binding
+The `DB` binding and database ID are configured in `wrangler.jsonc`.
 
-The initial adapter currently implements:
-- Health check
-- Public category and product listing/detail
-- Email OTP request/verification through Brevo HTTPS
-- First-admin bootstrap
-- Admin summary, user list, order list and order-status update
-- Admin product creation
+## Migrations
+Run `npm run db:migrate:local` for local development and `npm run db:migrate:remote` only after reviewing the migration. The migration creates the application tables; it does not import old PostgreSQL records.
 
-Still required before production:
-- Product update and spreadsheet import endpoints
-- End-to-end tests against a disposable Neon database
-- Migration automation and rate-limit review
-- Storefront checkout/order creation and payment integration
-- Final CORS and email sender verification
+## Required Worker secrets/variables
+- `JWT_SECRET`: random secret, at least 32 characters.
+- `ADMIN_BOOTSTRAP_TOKEN`: one-time first-admin secret, at least 32 characters.
+- `WEB_ORIGIN`: exact deployed storefront origin.
+- `BREVO_API_KEY` and `BREVO_SENDER_EMAIL`: email OTP delivery. Phone/SMS login is not implemented.
 
-Do not point the public storefront to this Worker until all remaining endpoints and tests are complete.
+## Current API
+Health, categories, product list/detail, email OTP, first-admin bootstrap, admin summary/users/orders/status and product creation.
 
-## Cloudflare dashboard deployment
+Still required before public launch: checkout/order creation, product update and CSV/XLSX import, storefront integration, rate-limit hardening, end-to-end tests, and email provider configuration. Do not connect the public storefront until these are complete.
 
-After the code is ready and a Cloudflare account is available:
-1. Workers & Pages → Create → Worker → Connect to Git.
-2. Select `saeed860/Avgoon` and branch `feature/admin-users-orders` for preview.
-3. Set the root directory to `apps/worker`.
-4. Build command: `npm install && npm run typecheck`.
-5. Deploy command: `npm run deploy`.
-6. Add Worker secrets/vars from `apps/api/DEPLOYMENT.md`.
-
-Use only the Free plan. Cloudflare Workers Free currently has a 100,000 requests/day allowance and 10 ms CPU per invocation.
-
-The database URL must be the Neon pooled PostgreSQL HTTPS-compatible connection string. Do not expose it to the browser.
+Use Cloudflare Free plan only. Do not enable paid add-ons or automatic upgrades.
