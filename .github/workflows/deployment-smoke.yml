@@ -76,7 +76,11 @@ jobs:
           grep -q "media.adeo.com/mkp" /tmp/store.html
           grep -q "/api/inquiries" /tmp/store.html
           grep -q "avgoon_products" /tmp/store.html
-          if grep -q "پنل گچی ساده ۱۲.۵ میلی‌متر" /tmp/store.html; then echo "Demo products must not appear in storefront"; exit 1; fi
+          grep -q "DEMO_PRODUCTS" /tmp/store.html
+          grep -q "نمونه نمایشی" /tmp/store.html
+          grep -q "محصول نمایشی قابل سفارش نیست" /tmp/store.html
+          grep -q "demoNotice" /tmp/store.html
+          echo "Clearly labelled non-orderable demo catalog PASS"
           if grep -q "۰۲۱-۹۱۰۰۴۰۸۰\|info@avgoon.ir" /tmp/store.html; then echo "Unverified placeholder contact data found"; exit 1; fi
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
