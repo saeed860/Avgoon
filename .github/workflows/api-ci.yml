@@ -51,3 +51,5 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'DROP TABLE "Address"'
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20261122110000_user_profile_addresses/migration.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT indexname FROM pg_indexes WHERE indexname = 'Address_one_default_per_user_idx'"
+      - name: Run profile and address integration tests
+        run: npm run test:profile
