@@ -9,7 +9,7 @@ This project must remain on free tiers. No paid Render, Koyeb, or database resou
 | Storefront | Cloudflare Pages | Static files in `docs/`; `.pages.dev` hostname |
 | API runtime | Cloudflare Workers Free | 100,000 requests/day; 10 ms CPU time per invocation |
 | PostgreSQL | Neon Free | 1 GB per project and 100 compute-hours/month; compute scales to zero |
-| Email OTP | Brevo Free | 3,000 emails/month, 100/day; sender domain verification required |
+| Email OTP | Brevo Free | 300 emails/day; verify a sender email address. A custom domain is recommended for deliverability but is not required to begin testing |
 | Source and CI | GitHub Free | Repository and automated tests |
 
 Cloudflare Workers Free is available without a credit card. Neon and Brevo have free plans, subject to their quotas and account verification requirements.
@@ -74,8 +74,8 @@ Set these as Worker secrets, never in source control:
 - `DATABASE_URL`: Neon pooled PostgreSQL URL.
 - `JWT_SECRET`: independent random secret of at least 32 characters.
 - `ADMIN_BOOTSTRAP_TOKEN`: one-time random token of at least 32 characters.
-- `RESEND_API_KEY`: Resend API key.
-- `RESEND_FROM`: verified sender identity.
+- `BREVO_API_KEY`: Resend API key.
+- `BREVO_SENDER_EMAIL`: verified sender identity.
 - `WEB_ORIGIN`: exact Cloudflare Pages origin.
 
 ## 6. First administrator
