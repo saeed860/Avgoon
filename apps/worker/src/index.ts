@@ -26,7 +26,7 @@ const enc = new TextEncoder();
 const b64 = (v: Uint8Array) => btoa(Array.from(v, x => String.fromCharCode(x)).join(''));
 const unb64 = (v: string) => Uint8Array.from(atob(v), x => x.charCodeAt(0));
 const now = () => new Date().toISOString();
-const stmt = (c: any, query: string, ...args: any[]) => c.env.DB.prepare(query).bind(...args);
+const stmt = (c: { env: Env }, query: string, ...args: any[]): D1Statement => c.env.DB.prepare(query).bind(...args);
 
 function randomOtp() {
   const max = 0x100000000, ceiling = Math.floor(max / 900000) * 900000;
