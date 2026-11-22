@@ -27,6 +27,20 @@ const b64 = (v: Uint8Array) => btoa(Array.from(v, x => String.fromCharCode(x)).j
 const unb64 = (v: string) => Uint8Array.from(atob(v), x => x.charCodeAt(0));
 const now = () => new Date().toISOString();
 const stmt = (c: { env: Env }, query: string, ...args: any[]): D1Statement => c.env.DB.prepare(query).bind(...args);
+async function attachProductImages(c:any, rows:any[]) {
+  if(!rows.length)return rows;
+  const ids=rows.map(r=>r.id), marks=ids.map(()=>'?').join(',');
+  const {results=[]}=await stmt(c,`SELECT productId,url,alt,sortOrder,isPrimary FROM ProductImage WHERE productId IN (${marks}) ORDER BY productId,sortOrder`,...ids).all<any>();
+  const grouped=new Map<string,any[]>();
+  for(const image of results){const list=grouped.get(image.productId)||[];list.push({url:image.url,alt:image.alt||'',sortOrder:image.sortOrder,isPrimary:!!image.isPrimary});grouped.set(image.productId,list);}
+  return rows.map(row=>{const images=grouped.get(row.id)||[];return {...row,images,imageUrl:images.find(x=>x.isPrimary)?.url||images[0]?.url||row.imageUrl};});
+}
+async function replaceProductImages(c:any, productId:string, images:{url:string;alt?:string}[]) {
+  const statements=[stmt(c,'DELETE FROM ProductImage WHERE productId=?',productId),...images.map((image,index)=>stmt(c,'INSERT INTO ProductImage(id,productId,url,alt,sortOrder,isPrimary,createdAt) VALUES(?,?,?,?,?,?,?)',crypto.randomUUID(),productId,image.url,image.alt||null,index,index===0?1:0,now()))];
+  await c.env.DB.batch(statements);
+  await stmt(c,'UPDATE Product SET imageUrl=?,updatedAt=? WHERE id=?',images[0]?.url||null,now(),productId).run();
+}
+
 async function hashKey(value:string) {
   const digest=await crypto.subtle.digest('SHA-256',enc.encode(value));
   return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
@@ -107,11 +121,13 @@ app.get('/api/products', async c => {
     stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,p.categoryId,p.createdAt,p.updatedAt,c.name AS categoryName,c.slug AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
     stmt(c,`SELECT COUNT(*) AS total FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where}`,...args).all()
   ]);
-  return c.json({items:results,total:count[0]?.total||0,page,limit});
+  return c.json({items:await attachProductImages(c,results),total:count[0]?.total||0,page,limit});
 });
 app.get('/api/products/:slug', async c => {
   const row=await stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,c.name AS categoryName,c.slug AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE p.slug=? AND p.isPublished=1 LIMIT 1`,c.req.param('slug')).first();
-  return row ? c.json(row) : fail(c,404,'محصول پیدا نشد');
+  if(!row)return fail(c,404,'محصول پیدا نشد');
+  const [withImages]=await attachProductImages(c,[row]);
+  return c.json(withImages);
 });
 
 app.post('/api/auth/request-otp', async c => {
@@ -261,7 +277,7 @@ app.get('/api/admin/inquiries',async c=>{
     stmt(c,`SELECT id,name,phone,email,projectType,message,status,createdAt,updatedAt FROM ProjectInquiry WHERE ${where} ORDER BY createdAt DESC LIMIT ? OFFSET ?`,status,status,limit,(page-1)*limit).all(),
     stmt(c,`SELECT COUNT(*) AS total FROM ProjectInquiry WHERE ${where}`,status,status).all()
   ]);
-  return c.json({items:results,total:counts[0]?.total||0,page,limit});
+  return c.json({items:await attachProductImages(c,results),total:counts[0]?.total||0,page,limit});
 });
 app.patch('/api/admin/inquiries/:id/status',async c=>{
   const p=z.object({status:z.enum(['NEW','CONTACTED','CLOSED'])}).safeParse(await c.req.json().catch(()=>null));
@@ -324,14 +340,15 @@ app.patch('/api/admin/orders/:id/status',async c=>{
   return row?c.json(row):fail(c,409,'وضعیت سفارش هم‌زمان تغییر کرده است؛ دوباره فهرست را تازه‌سازی کنید');
 });
 app.post('/api/admin/products',async c=>{
-  const p=z.object({sku:z.string().trim().min(1).max(80),name:z.string().trim().min(2).max(200),slug:z.string().trim().min(2).max(220),description:z.string().max(5000).optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\d+$/)]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().trim().min(1).max(30).default('عدد'),brand:z.string().trim().max(100).optional(),categorySlug:z.string().max(120).optional(),imageUrl:z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد').optional(),isPublished:z.boolean().default(false)}).safeParse(await c.req.json().catch(()=>null));
+  const p=z.object({sku:z.string().trim().min(1).max(80),name:z.string().trim().min(2).max(200),slug:z.string().trim().min(2).max(220),description:z.string().max(5000).optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\d+$/)]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().trim().min(1).max(30).default('عدد'),brand:z.string().trim().max(100).optional(),categorySlug:z.string().max(120).optional(),imageUrl:z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد').optional(),images:z.array(z.object({url:z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد'),alt:z.string().max(300).optional()})).max(12).optional(),isPublished:z.boolean().default(false)}).safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return c.json({ok:false,errors:p.error.flatten()},400);
   const x=p.data,id=crypto.randomUUID(),time=now();
   const category=x.categorySlug?await stmt(c,'SELECT id FROM Category WHERE slug=?',x.categorySlug).first<any>():null;
   if(x.categorySlug&&!category)return fail(c,400,'دسته‌بندی پیدا نشد');
   try{
-    await stmt(c,`INSERT INTO Product(id,sku,name,slug,description,priceToman,stock,unit,brand,imageUrl,isPublished,categoryId,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,id,x.sku,x.name,x.slug,x.description||null,x.priceToman===undefined?null:String(x.priceToman),x.stock,x.unit,x.brand||null,x.imageUrl||null,x.isPublished?1:0,category?.id||null,time,time).run();
-    return c.json({id,sku:x.sku,name:x.name,slug:x.slug,priceToman:x.priceToman??null,stock:x.stock,isPublished:x.isPublished},201);
+    await stmt(c,`INSERT INTO Product(id,sku,name,slug,description,priceToman,stock,unit,brand,imageUrl,isPublished,categoryId,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,id,x.sku,x.name,x.slug,x.description||null,x.priceToman===undefined?null:String(x.priceToman),x.stock,x.unit,x.brand||null,x.images?.[0]?.url||x.imageUrl||null,x.isPublished?1:0,category?.id||null,time,time).run();
+    if(x.images)await replaceProductImages(c,id,x.images);
+    return c.json({id,sku:x.sku,name:x.name,slug:x.slug,priceToman:x.priceToman??null,stock:x.stock,isPublished:x.isPublished,images:x.images||[]},201);
   }catch{return fail(c,409,'کد کالا یا نشانی محصول تکراری است');}
 });
 
@@ -354,12 +371,13 @@ const productUpdateSchema=z.object({
   description:z.string().max(5000).nullable().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\d+$/),z.null()]).optional(),
   stock:z.number().int().nonnegative().optional(),unit:z.string().min(1).max(30).optional(),brand:z.string().max(100).nullable().optional(),
   categorySlug:z.string().max(120).nullable().optional(),imageUrl:z.string().url().nullable().refine(v=>v===null||v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد').optional(),isPublished:z.boolean().optional(),
-  technicalSpecs:z.record(z.string(),z.unknown()).nullable().optional()
+  technicalSpecs:z.record(z.string(),z.unknown()).nullable().optional(),
+  images:z.array(z.object({url:z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد'),alt:z.string().max(300).optional()})).max(12).optional()
 }).strict().refine(v=>Object.keys(v).length>0);
 app.patch('/api/admin/products/:id',async c=>{
   const p=productUpdateSchema.safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return c.json({ok:false,errors:p.error.flatten()},400);
-  const data:any={...p.data}; delete data.categorySlug;
+  const data:any={...p.data}; delete data.categorySlug; delete data.images;
   const fields:string[]=[]; const values:any[]=[];
   for(const [key,value] of Object.entries(data)){
     const column=({priceToman:'priceToman',technicalSpecs:'technicalSpecs',isPublished:'isPublished'} as Record<string,string>)[key]||key;
@@ -374,7 +392,10 @@ app.patch('/api/admin/products/:id',async c=>{
   fields.push('updatedAt=?');values.push(now());values.push(c.req.param('id'));
   try{
     const row=await stmt(c,'UPDATE Product SET '+fields.join(',')+' WHERE id=? RETURNING id,sku,name,slug,priceToman,stock,unit,isPublished,categoryId,updatedAt',...values).first();
-    return row?c.json(row):fail(c,404,'محصول پیدا نشد');
+    if(!row)return fail(c,404,'محصول پیدا نشد');
+    if(p.data.images!==undefined)await replaceProductImages(c,c.req.param('id'),p.data.images);
+    const [withImages]=await attachProductImages(c,[row]);
+    return c.json(withImages);
   }catch{return fail(c,409,'کد کالا یا نامک تکراری است');}
 });
 app.post('/api/admin/products/import-csv',async c=>{
