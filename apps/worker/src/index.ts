@@ -114,10 +114,25 @@ app.get('/api/categories', async c => {
   return c.json(results);
 });
 app.get('/api/products', async c => {
-  const page=Math.max(1,Number(c.req.query('page'))||1), limit=Math.min(60,Math.max(1,Number(c.req.query('limit'))||24));
-  const q=(c.req.query('q')||'').trim(), category=c.req.query('category')||'', pattern='%'+q+'%';
-  const where='p.isPublished=1 AND (p.name LIKE ? OR p.sku LIKE ?) AND (? = \'\' OR c.slug = ?)';
-  const args=[pattern,pattern,category,category];
+  const page=Math.max(1,Math.min(10000,Number(c.req.query('page'))||1)), limit=Math.min(60,Math.max(1,Number(c.req.query('limit'))||24));
+  const q=(c.req.query('q')||'').trim().slice(0,100), category=(c.req.query('category')||'').trim().slice(0,80);
+  const brand=(c.req.query('brand')||'').trim().slice(0,100), spec=(c.req.query('spec')||'').trim().slice(0,100);
+  const minRaw=c.req.query('minPrice'), maxRaw=c.req.query('maxPrice');
+  const minPrice=minRaw!==undefined&&minRaw!==''?Number(minRaw):null, maxPrice=maxRaw!==undefined&&maxRaw!==''?Number(maxRaw):null;
+  if((minPrice!==null&&(!Number.isFinite(minPrice)||minPrice<0))||(maxPrice!==null&&(!Number.isFinite(maxPrice)||maxPrice<0))||(minPrice!==null&&maxPrice!==null&&minPrice>maxPrice))return fail(c,400,'محدوده قیمت معتبر نیست');
+  const stock=(c.req.query('stock')||'').trim();
+  if(stock&&!['available','low','out'].includes(stock))return fail(c,400,'فیلتر موجودی معتبر نیست');
+  const clauses=['p.isPublished=1'], args:any[]=[];
+  if(q){clauses.push('(p.name LIKE ? OR p.sku LIKE ? OR COALESCE(p.brand,\'\') LIKE ?)');const pattern='%'+q+'%';args.push(pattern,pattern,pattern);}
+  if(category){clauses.push('c.slug=?');args.push(category);}
+  if(brand){clauses.push('p.brand=?');args.push(brand);}
+  if(minPrice!==null){clauses.push('CAST(p.priceToman AS REAL)>=?');args.push(minPrice);}
+  if(maxPrice!==null){clauses.push('CAST(p.priceToman AS REAL)<=?');args.push(maxPrice);}
+  if(stock==='available')clauses.push('p.stock>5');
+  if(stock==='low')clauses.push('p.stock BETWEEN 1 AND 5');
+  if(stock==='out')clauses.push('p.stock<=0');
+  if(spec){clauses.push('CAST(COALESCE(p.technicalSpecs,\'\') AS TEXT) LIKE ?');args.push('%'+spec+'%');}
+  const where=clauses.join(' AND ');
   const [{results=[]},{results:count=[]}]=await Promise.all([
     stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.technicalSpecs,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,p.categoryId,p.createdAt,p.updatedAt,c.name AS categoryName,c.slug AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
     stmt(c,`SELECT COUNT(*) AS total FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where}`,...args).all()
