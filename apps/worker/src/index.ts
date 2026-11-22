@@ -164,9 +164,14 @@ async function requireAdmin(c: any, next: any) {
 app.post('/api/admin/bootstrap', async (c) => {
   const parsed = z.object({ token: z.string().min(32).max(512), channel: z.enum(['email', 'phone']), target: z.string().trim().min(5).max(150) }).safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return fail(c, 400, 'اطلاعات واردشده معتبر نیست');
-  if (!await sameSecret(parsed.data.token, c.env.ADMIN_BOOTSTRAP_TOKEN || '')) return fail(c, 403, 'کلید راه‌اندازی معتبر نیست');
-  const target = parsed.data.channel === 'email' ? parsed.data.target.toLowerCase() : parsed.data.target.replace(/[\s-]/g, '');
+  const target = parsed.data.channel === 'email' ? parsed.data.target.toLowerCase() : parsed.data.target.replace(/[\\s-]/g, '');
   const sql = db(c.env);
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const attemptKey = `bootstrap:${ip}`;
+  const attempts = await sql`SELECT COUNT(*)::int AS n FROM "OtpCode" WHERE target=${attemptKey} AND channel='bootstrap' AND "createdAt">NOW()-INTERVAL '1 hour'`;
+  if ((attempts[0]?.n || 0) >= 5) return fail(c, 429, 'تعداد تلاش‌های راه‌اندازی بیش از حد مجاز است');
+  await sql`INSERT INTO "OtpCode"(id,target,channel,"codeHash","expiresAt","consumedAt") VALUES(${crypto.randomUUID()},${attemptKey},'bootstrap','attempt',NOW()+INTERVAL '1 hour',NOW())`;
+  if (!await sameSecret(parsed.data.token, c.env.ADMIN_BOOTSTRAP_TOKEN || '')) return fail(c, 403, 'کلید راه‌اندازی معتبر نیست');
   const result = await sql.transaction([
     sql`SELECT pg_advisory_xact_lock(72190422)`,
     sql`SELECT COUNT(*)::int AS n FROM "User" WHERE role='ADMIN'`,
