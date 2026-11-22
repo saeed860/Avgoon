@@ -86,6 +86,11 @@ jobs:
           grep -q "setProductCardImage" /tmp/store.html
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
+          curl -fsSL "$WEB/product.html" -o /tmp/product.html
+          grep -q "technicalSpecs" /tmp/product.html
+          grep -q "مشخصات فنی" /tmp/product.html
+          grep -q "product.html?slug=" /tmp/store.html
+          echo "Product detail page and specification display PASS"
           echo "Admin response bytes: $(wc -c < /tmp/admin.html)"
           grep -o ".\{0,40\}editProduct.\{0,40\}" /tmp/admin.html | head -3 || true
           grep -q "editProduct" /tmp/admin.html
@@ -98,6 +103,8 @@ jobs:
           grep -q "pImages" /tmp/admin.html
           grep -q "readProductImages" /tmp/admin.html
           grep -q "pGalleryPreview" /tmp/admin.html
+          grep -q "pSpecs" /tmp/admin.html
+          grep -q "technicalSpecs" /tmp/admin.html
           grep -q "گالری چندتصویری" /tmp/product-import-guide.html
           echo "Admin product editor and image gallery PASS"
           grep -q "xlsx.full.min.js" /tmp/admin.html
@@ -122,7 +129,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
-          for filename in ('store.html','admin.html','first-admin.html'):
+          for filename in ('store.html','admin.html','first-admin.html','product.html'):
               html = Path('/tmp', filename).read_text(encoding='utf-8')
               scripts = [x for x in re.findall(r'<script\b[^>]*>(.*?)</script>', html, flags=re.I|re.S) if x.strip()]
               Path('/tmp', filename + '.js').write_text('\n'.join(scripts), encoding='utf-8')
@@ -130,7 +137,7 @@ jobs:
           if not Path('/tmp/admin.html.js').stat().st_size:
               raise SystemExit('Admin inline JavaScript was not found')
           PY
-          for jsfile in /tmp/store.html.js /tmp/admin.html.js /tmp/first-admin.html.js; do
+          for jsfile in /tmp/store.html.js /tmp/admin.html.js /tmp/first-admin.html.js /tmp/product.html.js; do
             if test -s "$jsfile"; then
               if ! node --check "$jsfile" >/tmp/js-check.log 2>&1; then
                 echo "JavaScript syntax failed: $jsfile"
