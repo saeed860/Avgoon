@@ -63,6 +63,9 @@ jobs:
           grep -q "checkoutModal" /tmp/store.html
           grep -q "cEmail" /tmp/store.html
           grep -q "submitConsult" /tmp/store.html
+          grep -q "/api/inquiries" /tmp/store.html
+          grep -q "در حال حاضر محصول واقعی" /tmp/store.html
+          if grep -q "۰۲۱-۹۱۰۰۴۰۸۰\|info@avgoon.ir" /tmp/store.html; then echo "Unverified placeholder contact data found"; exit 1; fi
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
           echo "Admin response bytes: $(wc -c < /tmp/admin.html)"
