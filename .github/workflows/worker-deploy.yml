@@ -25,10 +25,16 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - name: Deploy Worker to Cloudflare
+        if: env.CLOUDFLARE_API_TOKEN != ''
         uses: cloudflare/wrangler-action@v3
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 95918e1df4335e67e8884812b0260733
           command: deploy
           workingDirectory: apps/worker
-          wranglerVersion: 4.48.0
+          wranglerVersion: 4.166.0
+      - name: Explain skipped deployment
+        if: env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "Worker typecheck passed; deployment skipped because repository secret CLOUDFLARE_API_TOKEN is not configured."
