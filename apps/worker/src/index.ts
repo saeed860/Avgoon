@@ -55,7 +55,7 @@ async function issueToken(env: Env, user: {id:string;role:string}) {
 app.use('/api/*', cors({
   origin: (origin,c) => origin === c.env.WEB_ORIGIN ? origin : '',
   allowMethods: ['GET','POST','PATCH','OPTIONS'],
-  allowHeaders: ['Content-Type','Authorization'], maxAge: 86400
+  allowHeaders: ['Content-Type','Authorization','Idempotency-Key'], maxAge: 86400
 }));
 app.get('/api/health', c => c.json({ok:true,service:'AVGOON API',runtime:'cloudflare-workers-d1',time:now()}));
 
@@ -224,8 +224,10 @@ app.post('/api/admin/products',async c=>{
   const p=z.object({sku:z.string().min(1),name:z.string().min(2),slug:z.string().min(2),description:z.string().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string()]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().default('عدد'),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean().default(false)}).safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return c.json({ok:false,errors:p.error.flatten()},400);
   const x=p.data,id=crypto.randomUUID(),time=now();
+  const category=x.categorySlug?await stmt(c,'SELECT id FROM Category WHERE slug=?',x.categorySlug).first<any>():null;
+  if(x.categorySlug&&!category)return fail(c,400,'دسته‌بندی پیدا نشد');
   try{
-    await stmt(c,`INSERT INTO Product(id,sku,name,slug,description,priceToman,stock,unit,brand,imageUrl,isPublished,categoryId,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,id,x.sku,x.name,x.slug,x.description||null,x.priceToman===undefined?null:String(x.priceToman),x.stock,x.unit,x.brand||null,x.imageUrl||null,x.isPublished?1:0,x.categorySlug? (await stmt(c,'SELECT id FROM Category WHERE slug=?',x.categorySlug).first<any>())?.id||null:null,time,time).run();
+    await stmt(c,`INSERT INTO Product(id,sku,name,slug,description,priceToman,stock,unit,brand,imageUrl,isPublished,categoryId,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,id,x.sku,x.name,x.slug,x.description||null,x.priceToman===undefined?null:String(x.priceToman),x.stock,x.unit,x.brand||null,x.imageUrl||null,x.isPublished?1:0,category?.id||null,time,time).run();
     return c.json({id,sku:x.sku,name:x.name,slug:x.slug,priceToman:x.priceToman??null,stock:x.stock,isPublished:x.isPublished},201);
   }catch{return fail(c,409,'کد کالا یا نشانی محصول تکراری است');}
 });
