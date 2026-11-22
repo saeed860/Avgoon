@@ -7,7 +7,7 @@
 - `apps/worker/`: API مبتنی بر Hono و Cloudflare Workers
 - `apps/worker/migrations/`: مهاجرت‌های Cloudflare D1
 - `apps/api/`: پیاده‌سازی اولیه Express/Prisma برای توسعه محلی و مرجع مدل داده
-- `docs/product-import-template.csv`: قالب ورود گروهی کالا
+- `docs/product-import-template.csv`: قالب ورود گروهی کالا (فقط سرستون‌ها؛ بدون قیمت و موجودی ساختگی)
 
 ## معماری میزبانی رایگان
 - Frontend: Cloudflare Pages
