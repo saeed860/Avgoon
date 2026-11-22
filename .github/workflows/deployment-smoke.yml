@@ -62,8 +62,8 @@ jobs:
           const fs = require('fs');
           for (const file of ['/tmp/store.html','/tmp/admin.html','/tmp/first-admin.html']) {
             const html = fs.readFileSync(file,'utf8');
-            const scripts = [...html.matchAll(/<script(?![^>]*\\bsrc=)[^>]*>([\\s\\S]*?)<\\/script>/gi)].map(x=>x[1]).filter(x=>x.trim());
-            fs.writeFileSync('/tmp/'+file.split('/').pop()+'.js', scripts.join('\\n'));
+            const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(x=>x[1]).filter(x=>x.trim());
+            fs.writeFileSync('/tmp/'+file.split('/').pop()+'.js', scripts.join('\n'));
           }
           NODE
           node --check /tmp/store.html.js
