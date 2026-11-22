@@ -228,8 +228,22 @@ app.get('/api/admin/orders',async c=>{
 app.patch('/api/admin/orders/:id/status',async c=>{
   const p=z.object({status:z.enum(['PENDING','PAID','PROCESSING','SHIPPED','COMPLETED','CANCELLED'])}).safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return fail(c,400,'وضعیت سفارش معتبر نیست');
-  const row=await stmt(c,'UPDATE "Order" SET status=? WHERE id=? RETURNING id,status,totalToman,createdAt',p.data.status,c.req.param('id')).first();
-  return row?c.json(row):fail(c,404,'سفارش پیدا نشد');
+  const id=c.req.param('id');
+  const current=await stmt(c,'SELECT id,status FROM "Order" WHERE id=?',id).first<any>();
+  if(!current)return fail(c,404,'سفارش پیدا نشد');
+  const transitions:Record<string,string[]>={
+    PENDING:['PAID','CANCELLED'],
+    PAID:['PROCESSING','CANCELLED'],
+    PROCESSING:['SHIPPED','CANCELLED'],
+    SHIPPED:['COMPLETED'],
+    COMPLETED:[],
+    CANCELLED:[]
+  };
+  if(!transitions[current.status]?.includes(p.data.status)){
+    return fail(c,409,'تغییر وضعیت سفارش مجاز نیست؛ وضعیت فعلی: '+current.status);
+  }
+  const row=await stmt(c,'UPDATE "Order" SET status=? WHERE id=? AND status=? RETURNING id,status,totalToman,createdAt',p.data.status,id,current.status).first();
+  return row?c.json(row):fail(c,409,'وضعیت سفارش هم‌زمان تغییر کرده است؛ دوباره فهرست را تازه‌سازی کنید');
 });
 app.post('/api/admin/products',async c=>{
   const p=z.object({sku:z.string().min(1),name:z.string().min(2),slug:z.string().min(2),description:z.string().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string()]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().default('عدد'),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean().default(false)}).safeParse(await c.req.json().catch(()=>null));
