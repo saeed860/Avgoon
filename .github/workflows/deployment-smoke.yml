@@ -58,14 +58,19 @@ jobs:
           curl -fsS "$WEB/first-admin.html" -o /tmp/first-admin.html
           grep -q "/api/admin/bootstrap" /tmp/first-admin.html
           echo "Pages storefront, product editor, Excel import and first-admin setup PASS"
-          node - <<'NODE'
-          const fs = require('fs');
-          for (const file of ['/tmp/store.html','/tmp/admin.html','/tmp/first-admin.html']) {
-            const html = fs.readFileSync(file,'utf8');
-            const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(x=>x[1]).filter(x=>x.trim());
-            fs.writeFileSync('/tmp/'+file.split('/').pop()+'.js', scripts.join('\n'));
-          }
-          NODE
+          python3 - <<'PY'
+          from pathlib import Path
+          for filename in ('store.html','admin.html','first-admin.html'):
+              html = Path('/tmp', filename).read_text(encoding='utf-8')
+              scripts = []
+              for part in html.split('<script')[1:]:
+                  if '>' not in part or '</script>' not in part:
+                      continue
+                  body = part.split('>', 1)[1].split('</script>', 1)[0]
+                  if body.strip():
+                      scripts.append(body)
+              Path('/tmp', filename + '.js').write_text('\n'.join(scripts), encoding='utf-8')
+          PY
           node --check /tmp/store.html.js
           node --check /tmp/admin.html.js
           node --check /tmp/first-admin.html.js
