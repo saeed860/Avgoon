@@ -41,10 +41,11 @@ jobs:
           admin_status=$(curl -sS -o /tmp/admin.json -w "%{http_code}" "$API/api/admin/products")
           test "$admin_status" = "401"
           echo "Admin API protection PASS"
-          inquiry_status=$(curl -sS -o /tmp/inquiry-invalid.json -w "%{http_code}" -X POST "$API/api/inquiries" -H "Content-Type: application/json" --data '{"name":"Smoke Test","phone":"invalid","message":"Automated validation test"}')
+          inquiry_status=$(curl -sS -o /tmp/inquiry-invalid.json -w "%{http_code}" -X POST "$API/api/inquiries" -H "Content-Type: application/json" --data '{"name":"Smoke Test","phone":"abcdefgh","message":"Automated validation test"}')
           echo "Inquiry invalid-phone status=$inquiry_status body=$(cat /tmp/inquiry-invalid.json)"
           test "$inquiry_status" = "400"
-          spam_status=$(curl -sS -o /tmp/inquiry-spam.json -w "%{http_code}" -X POST "$API/api/inquiries" -H "Content-Type: application/json" --data '{"name":"Bot","phone":"invalid","message":"Automated honeypot test","website":"https://spam.invalid"}')
+          spam_status=$(curl -sS -o /tmp/inquiry-spam.json -w "%{http_code}" -X POST "$API/api/inquiries" -H "Content-Type: application/json" --data '{"name":"Bot","phone":"09123456789","message":"Automated honeypot test","website":"https://spam.invalid"}')
+          echo "Inquiry honeypot status=$spam_status body=$(cat /tmp/inquiry-spam.json)"
           test "$spam_status" = "201"
           inquiry_admin_status=$(curl -sS -o /tmp/inquiry-admin.json -w "%{http_code}" "$API/api/admin/inquiries")
           test "$inquiry_admin_status" = "401"
