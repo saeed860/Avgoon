@@ -71,7 +71,13 @@ jobs:
                       scripts.append(body)
               Path('/tmp', filename + '.js').write_text('\n'.join(scripts), encoding='utf-8')
           PY
-          node --check /tmp/store.html.js
-          node --check /tmp/admin.html.js
-          node --check /tmp/first-admin.html.js
+          for jsfile in /tmp/store.html.js /tmp/admin.html.js /tmp/first-admin.html.js; do
+            test -s "$jsfile"
+            if ! node --check "$jsfile" >/tmp/js-check.log 2>&1; then
+              echo "JavaScript syntax failed: $jsfile"
+              cat /tmp/js-check.log
+              sed -n '1,100p' "$jsfile"
+              exit 1
+            fi
+          done
           echo "Frontend JavaScript syntax PASS"
