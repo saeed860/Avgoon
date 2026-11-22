@@ -300,7 +300,7 @@ app.get('/api/admin/products',async c=>{
     stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.brand,p.imageUrl,p.isPublished,p.createdAt,p.updatedAt,COALESCE(c.name,'') AS categoryName,COALESCE(c.slug,'') AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
     stmt(c,`SELECT COUNT(*) AS total FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where}`,...args).all()
   ]);
-  return c.json({items:results,total:counts[0]?.total||0,page,limit});
+  return c.json({items:await attachProductImages(c,results),total:counts[0]?.total||0,page,limit});
 });
 app.get('/api/admin/users',async c=>{
   const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||25)),q=(c.req.query('q')||'').trim(),like='%'+q+'%';
