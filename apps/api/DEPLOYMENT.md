@@ -8,8 +8,16 @@
 - `SMTP_HOST`, `SMTP_PORT` (default 587), `SMTP_SECURE` (`true` for implicit TLS), `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`: required for real email OTP delivery.
 - `NODE_ENV=production`.
 
+## Render web service settings
+- Root directory: `apps/api`
+- Build command: `npm install && npx prisma generate && npm run build`
+- Start command: `npm start`
+- Health check path: `/api/health`
+- Set `WEB_ORIGIN` to the exact storefront origin (for GitHub Pages, `https://saeed860.github.io`, without the repository path).
+- Render provides `PORT`; the API binds to it on `0.0.0.0`.
+
 ## Database release
-Run the committed Prisma migrations before starting the API:
+Configure the database connection and run the committed Prisma migrations before starting the API:
 
 ```sh
 npx prisma migrate deploy
