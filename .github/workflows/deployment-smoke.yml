@@ -58,3 +58,15 @@ jobs:
           curl -fsS "$WEB/first-admin.html" -o /tmp/first-admin.html
           grep -q "/api/admin/bootstrap" /tmp/first-admin.html
           echo "Pages storefront, product editor, Excel import and first-admin setup PASS"
+          node - <<'NODE'
+          const fs = require('fs');
+          for (const file of ['/tmp/store.html','/tmp/admin.html','/tmp/first-admin.html']) {
+            const html = fs.readFileSync(file,'utf8');
+            const scripts = [...html.matchAll(/<script(?![^>]*\\bsrc=)[^>]*>([\\s\\S]*?)<\\/script>/gi)].map(x=>x[1]).filter(x=>x.trim());
+            fs.writeFileSync('/tmp/'+file.split('/').pop()+'.js', scripts.join('\\n'));
+          }
+          NODE
+          node --check /tmp/store.html.js
+          node --check /tmp/admin.html.js
+          node --check /tmp/first-admin.html.js
+          echo "Frontend JavaScript syntax PASS"
