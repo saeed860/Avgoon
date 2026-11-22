@@ -7,7 +7,7 @@ This is the zero-cost edge deployment adapter for the existing PostgreSQL schema
 The initial adapter currently implements:
 - Health check
 - Public category and product listing/detail
-- Email OTP request/verification through Resend HTTPS
+- Email OTP request/verification through Brevo HTTPS
 - First-admin bootstrap
 - Admin summary, user list, order list and order-status update
 - Admin product creation
