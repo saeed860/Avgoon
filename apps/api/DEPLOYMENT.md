@@ -1,87 +1,93 @@
-# AVGOON — zero-cost deployment path
+# AVGOON — zero-cost deployment plan
 
-This configuration deliberately uses free tiers only. No paid Render plan or Render Postgres instance is required.
+This project must remain on free tiers. No paid Render, Koyeb, or database resources should be created.
 
-## Free hosting architecture
+## Selected free stack
 
-| Component | Provider | Free tier purpose |
+| Component | Provider | Free allowance / note |
 |---|---|---|
-| Storefront | Cloudflare Pages | Static files in `docs/`; production site at a `.pages.dev` address |
-| API | Render Free Web Service | Node/Express API; sleeps after 15 minutes idle and may take about a minute to wake |
-| PostgreSQL | Neon Free | Persistent hosted PostgreSQL; use the pooled connection string |
-| Email OTP | Resend Free | HTTPS email API; up to 3,000 emails/month and 100/day; sender domain must be verified |
+| Storefront | Cloudflare Pages | Static files in `docs/`; `.pages.dev` hostname |
+| API runtime | Cloudflare Workers Free | 100,000 requests/day; 10 ms CPU time per invocation |
+| PostgreSQL | Neon Free | 1 GB per project and 100 compute-hours/month; compute scales to zero |
+| Email OTP | Resend Free | 3,000 emails/month, 100/day; sender domain verification required |
 | Source and CI | GitHub Free | Repository and automated tests |
 
-Do not use Render's Free Postgres for customer data: free databases expire after 30 days and have no backups. Use Neon for the persistent database instead.
+Cloudflare Workers Free is available without a credit card. Neon and Resend have free plans, subject to their quotas and account verification requirements.
+
+## Important deployment decision
+
+The existing Express + Prisma API in `apps/api` is tested and remains the reference/local API. It cannot simply be uploaded as-is to Cloudflare Workers because Workers do not provide a normal persistent Node.js server process and Prisma's current PostgreSQL runtime is not the selected edge runtime.
+
+The production API therefore needs a Worker-compatible adapter/runtime using the Neon serverless HTTPS driver while preserving the existing PostgreSQL schema and endpoint contracts. Do not point the storefront to a partially ported API. Keep the Express API and its passing CI intact until the Worker implementation passes equivalent tests.
+
+Render's free Blueprint was evaluated but Render returned `need_payment_info` during planning for this account. No service or database was created. Since the requirement is zero cost and no payment method, Render has been removed from the deployment path.
 
 ## 1. Storefront — Cloudflare Pages
 
-Connect the GitHub repository `saeed860/Avgoon` to Cloudflare Pages with:
+Connect repository `saeed860/Avgoon` to Cloudflare Pages:
 - Production branch: `main` after the reviewed PR is merged.
 - Root directory: `docs`
-- Build command: leave empty (the storefront is static HTML/CSS/JS).
+- Build command: leave empty.
 - Build output directory: `.`
-- No build environment variables are needed for the static upload.
 
-The Pages hostname is created by Cloudflare. After the API is deployed, set that exact origin as `WEB_ORIGIN` in Render and configure `docs/config.js` with the API's HTTPS base URL.
+After the Worker API has been deployed, update `docs/config.js` with its public HTTPS URL:
+```js
+window.AVGOON_API_URL = 'https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev';
+```
+This file is public browser code. Never place database URLs, API keys, JWT secrets or bootstrap tokens in it.
 
-GitHub Pages is not the selected production host: GitHub's Pages policy says it is not intended for sites primarily facilitating commercial transactions.
+GitHub Pages is not selected for production because GitHub's Pages policy says it is not intended for sites primarily facilitating commercial transactions.
 
 ## 2. Database — Neon Free
 
 Create a PostgreSQL project on Neon's Free plan:
-- Create a database named `avgoon`.
+- Create database `avgoon`.
 - Copy the pooled connection string (hostname commonly includes `-pooler`).
-- Add `?sslmode=require` if it is not already included.
-- Save it as Render's `DATABASE_URL` secret.
+- Use TLS (`sslmode=require`).
+- Keep the connection string private; it will become a Worker secret named `DATABASE_URL`.
 
-The Free plan currently includes 1 GB per project and 100 compute-hours per project per month. Compute scales to zero after inactivity. Monitor usage and keep independent backups/exports of important business data.
+The current Free plan includes 1 GB per project and 100 compute-hours per project per month. Compute scales to zero after inactivity. It is not a substitute for backups: export important business data regularly.
 
-## 3. API — Render Free
+## 3. API — Cloudflare Workers Free
 
-The repository includes `render.yaml`. In Render, create a Blueprint from this repository and choose the free web-service plan. Confirm that no paid resources are selected.
+The Worker implementation is a separate deployment target. It must:
+- Preserve `/api/health`, categories/products, OTP auth and admin endpoints.
+- Use Neon serverless HTTPS queries, not a long-lived TCP connection.
+- Validate every request and keep secrets in Worker secrets.
+- Use Web Crypto for OTP hashing and JWT signing/verification.
+- Send OTP through Resend's HTTPS API (not SMTP).
+- Keep the existing PostgreSQL tables and migrations compatible.
 
-The Blueprint configures:
-- Root directory: `apps/api`
-- Build: `npm install && npx prisma generate && npm run build`
-- Start: `npx prisma migrate deploy && npm start`
-- Health check: `/api/health`
-- Region: Frankfurt
-- Plan: Free
+Cloudflare Workers Free currently allows 100,000 requests/day and 10 ms CPU time per invocation. Design expensive operations (especially spreadsheet parsing) outside the request CPU budget or retain them as a controlled administrative import process.
 
-Render Free services sleep after 15 minutes without inbound traffic; the first request after sleep may take about a minute. The filesystem is ephemeral, so uploaded files must not be stored locally. Customer data belongs in Neon.
+## 4. Email OTP — Resend Free
 
-Render blocks outbound SMTP ports 25, 465 and 587 on Free web services. Email delivery therefore uses Resend's HTTPS API rather than SMTP.
+Resend's free tier currently allows 3,000 transactional emails/month and 100/day. Verify a sender domain before enabling customer OTP delivery. Configure only these secrets in the Worker:
+- `RESEND_API_KEY`
+- `RESEND_FROM`
 
-## 4. Required secrets and settings
+SMS OTP remains disabled until a genuinely free provider and a secure provider-specific adapter are selected.
 
-Render's Blueprint creates random values for `JWT_SECRET` and `ADMIN_BOOTSTRAP_TOKEN`. Set these remaining variables manually:
-- `DATABASE_URL`: Neon pooled PostgreSQL connection string.
-- `WEB_ORIGIN`: exact Cloudflare Pages origin, e.g. `https://avgoon.pages.dev` (replace with the actual assigned hostname).
+## 5. Required secrets
+
+Set these as Worker secrets, never in source control:
+- `DATABASE_URL`: Neon pooled PostgreSQL URL.
+- `JWT_SECRET`: independent random secret of at least 32 characters.
+- `ADMIN_BOOTSTRAP_TOKEN`: one-time random token of at least 32 characters.
 - `RESEND_API_KEY`: Resend API key.
-- `RESEND_FROM`: verified sender, e.g. `Avgoon <no-reply@your-verified-domain>`.
-- `NODE_ENV=production` is already configured by the Blueprint.
-
-Resend Free requires a verified sender domain for real customer delivery. Do not enable email login until the sender domain is verified and an actual message is tested. SMS login remains disabled until a free SMS provider is selected and a dedicated adapter is implemented.
-
-## 5. Configure the storefront API URL
-
-Edit `docs/config.js` after Render assigns the API hostname and set:
-```js
-window.AVGOON_API_URL = 'https://YOUR-AVGOON-API.onrender.com';
-```
-Then deploy the updated `docs/` directory to Cloudflare Pages. Never place secret keys in this file; it is public browser code.
+- `RESEND_FROM`: verified sender identity.
+- `WEB_ORIGIN`: exact Cloudflare Pages origin.
 
 ## 6. First administrator
 
-1. Deploy the storefront and API, and verify `/api/health`.
-2. Configure and test real email OTP using the verified Resend sender.
+1. Deploy and test the full Worker API and verify `/api/health`.
+2. Configure and test real email OTP.
 3. Register the intended administrator account and verify its email.
-4. Open `/first-admin.html`, enter the API URL, verified email and the one-time bootstrap token.
-5. After success, remove `ADMIN_BOOTSTRAP_TOKEN` from Render environment variables and redeploy.
+4. Open `/first-admin.html`, enter the Worker API URL, verified email and one-time bootstrap token.
+5. After success, remove `ADMIN_BOOTSTRAP_TOKEN` from Worker secrets.
 
 ## 7. Release safety
 
-The initial migration is in `prisma/migrations/20261122090000_init`. Render runs committed migrations on service start. Do not import live customer data or open real orders until the API, email delivery, backups, checkout/payment integration and end-to-end tests have been verified.
+The initial PostgreSQL migration is in `prisma/migrations/20261122090000_init`. The Express CI on the feature branch has passed Prisma validation, client generation, PostgreSQL migration deployment and TypeScript build. These tests validate the reference API, not the future Worker adapter.
 
-Free-tier services are suitable for development and a small pilot, not a high-availability commercial launch. Check the providers' current quotas regularly.
+Do not accept real orders or payments until the Worker API, email delivery, backup/export process, checkout/payment integration and end-to-end tests have all passed.
