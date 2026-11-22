@@ -41,6 +41,13 @@ jobs:
           admin_status=$(curl -sS -o /tmp/admin.json -w "%{http_code}" "$API/api/admin/products")
           test "$admin_status" = "401"
           echo "Admin API protection PASS"
+          inquiry_status=$(curl -sS -o /tmp/inquiry-invalid.json -w "%{http_code}" -X POST "$API/api/inquiries" -H "Content-Type: application/json" --data '{"name":"Smoke Test","phone":"invalid","message":"Automated validation test"}')
+          test "$inquiry_status" = "400"
+          spam_status=$(curl -sS -o /tmp/inquiry-spam.json -w "%{http_code}" -X POST "$API/api/inquiries" -H "Content-Type: application/json" --data '{"name":"Bot","phone":"invalid","message":"Automated honeypot test","website":"https://spam.invalid"}')
+          test "$spam_status" = "201"
+          inquiry_admin_status=$(curl -sS -o /tmp/inquiry-admin.json -w "%{http_code}" "$API/api/admin/inquiries")
+          test "$inquiry_admin_status" = "401"
+          echo "Inquiry validation, honeypot and admin authorization PASS"
           otp_status=$(curl -sS -o /tmp/otp.json -w "%{http_code}" -X POST "$API/api/auth/request-otp" -H "Content-Type: application/json" --data '{"target":"smoke@example.com","channel":"email"}')
           test "$otp_status" = "503"
           echo "OTP correctly reports missing Resend secret (503)"
@@ -52,11 +59,15 @@ jobs:
           curl -fsSL "$WEB/" -o /tmp/store.html
           grep -q "AVGOON_API_URL" <(curl -fsSL "$WEB/config.js")
           grep -q "checkoutModal" /tmp/store.html
+          grep -q "cEmail" /tmp/store.html
+          grep -q "submitConsult" /tmp/store.html
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
           echo "Admin response bytes: $(wc -c < /tmp/admin.html)"
           grep -o ".\{0,40\}editProduct.\{0,40\}" /tmp/admin.html | head -3 || true
           grep -q "editProduct" /tmp/admin.html
+          grep -q "inquiriesPanel" /tmp/admin.html
+          grep -q "loadInquiries" /tmp/admin.html
           echo "Admin product editor PASS"
           grep -q "xlsx.full.min.js" /tmp/admin.html
           echo "Excel import UI PASS"
