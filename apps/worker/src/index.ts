@@ -77,6 +77,8 @@ app.post('/api/inquiries',async c=>{
   }).safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return fail(c,400,'اطلاعات درخواست مشاوره معتبر نیست');
   if(p.data.website)return c.json({ok:true,message:'درخواست شما ثبت شد.'},201);
+  const phone=p.data.phone.replace(/[\s()-]/g,'');
+  if(!/^\+?[0-9]{8,15}$/.test(phone))return fail(c,400,'شماره تماس معتبر نیست');
   const ip=c.req.header('CF-Connecting-IP')||'unknown';
   const ipHash=await hashKey(ip+':'+c.env.JWT_SECRET);
   const since=new Date(Date.now()-3600000).toISOString();
@@ -86,7 +88,7 @@ app.post('/api/inquiries',async c=>{
   await stmt(c,"INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt) VALUES(?,?,'inquiry','rate-limit',?,?,?)",crypto.randomUUID(),ipHash,new Date(Date.now()+86400000).toISOString(),timestamp,timestamp).run();
   const id=crypto.randomUUID();
   await stmt(c,'INSERT INTO ProjectInquiry(id,name,phone,email,projectType,message,status,createdAt,updatedAt) VALUES(?,?,?,?,?,? ,\'NEW\',?,?)',
-    id,p.data.name,p.data.phone,p.data.email||null,p.data.projectType||null,p.data.message,timestamp,timestamp).run();
+    id,p.data.name,phone,p.data.email||null,p.data.projectType||null,p.data.message,timestamp,timestamp).run();
   return c.json({ok:true,id,message:'درخواست مشاوره شما با موفقیت ثبت شد.'},201);
 });
 
