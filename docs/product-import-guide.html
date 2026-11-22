@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>راهنمای ورود محصولات | آوگون</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Estedad:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f5f6;color:#20252b;font-family:Estedad,Tahoma,sans-serif;line-height:2}
+.wrap{width:min(920px,calc(100% - 28px));margin:35px auto}.head,.panel{background:#fff;border:1px solid #e5e8eb;border-radius:10px;padding:22px;margin-bottom:16px}.brand{font-size:20px;font-weight:900;letter-spacing:2px}.brand small{display:block;font-size:9px;color:#87919a;letter-spacing:3px}.muted{color:#68727b;font-size:13px}.btn{display:inline-block;background:#ef8125;color:#fff;text-decoration:none;padding:9px 16px;border-radius:5px;font-size:13px;font-weight:700}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{text-align:right;padding:10px;border-bottom:1px solid #eceff1;vertical-align:top}.table th{background:#f7f8f9}.code{direction:ltr;text-align:left;display:inline-block;background:#f1f3f5;padding:2px 7px;border-radius:4px;font-family:monospace}.warn{background:#fff5e9;border:1px solid #f7d5ad;padding:12px;border-radius:6px;font-size:12px}
+</style></head>
+<body><main class="wrap">
+<header class="head"><div class="brand">AVGOON<small>BUILDING SYSTEMS</small></div><h1 style="font-size:23px;margin:14px 0 4px">راهنمای ورود محصولات</h1><p class="muted">فایل CSV یا Excel را در پنل مدیریت، بخش محصولات وارد کنید. در فایل Excel فقط شیت اول خوانده می‌شود.</p><a class="btn" href="product-import-template.csv" download>دریافت قالب خالی CSV</a> <a class="btn" style="background:#20252b" href="admin.html">بازگشت به پنل مدیریت</a></header>
+<section class="panel"><h2 style="font-size:17px">ستون‌های فایل</h2><table class="table"><thead><tr><th>ستون</th><th>کاربرد</th><th>الزام</th></tr></thead><tbody>
+<tr><td><span class="code">sku</span></td><td>کد یکتای کالا</td><td>الزامی</td></tr>
+<tr><td><span class="code">name</span></td><td>نام فارسی محصول</td><td>الزامی</td></tr>
+<tr><td><span class="code">slug</span></td><td>نامک انگلیسی یکتا، بدون فاصله</td><td>الزامی</td></tr>
+<tr><td><span class="code">description</span></td><td>شرح و مشخصات محصول</td><td>اختیاری</td></tr>
+<tr><td><span class="code">priceToman</span></td><td>قیمت به تومان، فقط عدد صحیح و بدون جداکننده</td><td>اختیاری</td></tr>
+<tr><td><span class="code">stock</span></td><td>موجودی عدد صحیح و صفر یا بیشتر</td><td>الزامی</td></tr>
+<tr><td><span class="code">unit</span></td><td>واحد فروش؛ مانند عدد، برگ، شاخه یا بسته</td><td>اختیاری</td></tr>
+<tr><td><span class="code">brand</span></td><td>نام برند تولیدکننده</td><td>اختیاری</td></tr>
+<tr><td><span class="code">categorySlug</span></td><td>شناسه دسته‌بندی از جدول زیر</td><td>اختیاری</td></tr>
+<tr><td><span class="code">imageUrl</span></td><td>نشانی مستقیم HTTPS تصویر واقعی محصول</td><td>اختیاری</td></tr>
+<tr><td><span class="code">isPublished</span></td><td>true برای انتشار، false برای پیش‌نویس</td><td>اختیاری؛ پیش‌فرض false</td></tr>
+</tbody></table></section>
+<section class="panel"><h2 style="font-size:17px">شناسه دسته‌بندی‌ها</h2><table class="table"><thead><tr><th>نام</th><th>categorySlug</th></tr></thead><tbody>
+<tr><td>صفحات گچی</td><td><span class="code">gypsum-boards</span></td></tr>
+<tr><td>سازه‌های فلزی</td><td><span class="code">metal-framing</span></td></tr>
+<tr><td>عایق‌ها</td><td><span class="code">insulation</span></td></tr>
+<tr><td>ملزومات اجرا</td><td><span class="code">accessories</span></td></tr>
+</tbody></table></section>
+<section class="panel"><h2 style="font-size:17px">نکات مهم قبل از واردسازی</h2><ul class="muted">
+<li>کد کالا و نامک باید در کل فروشگاه یکتا باشند.</li>
+<li>قیمت را به تومان وارد کنید؛ مثال: <span class="code">185000</span>، بدون کاما یا واحد پول.</li>
+<li>در CSV، ستون <span class="code">imageUrl</span> فقط تصویر اصلی محصول را می‌گیرد؛ برای گالری چندتصویری، پس از واردسازی محصول را در پنل ویرایش کنید و نشانی هر تصویر HTTPS را در یک خط وارد کنید. خط اول تصویر اصلی است و حداکثر ۱۲ تصویر پذیرفته می‌شود.</li><li>نشانی تصویر باید مستقیم، عمومی و HTTPS باشد؛ تصویر باید بدون ورود به حساب قابل مشاهده باشد.</li>
+<li>از تصویر AI یا تصویر نامرتبط با محصول استفاده نکنید.</li>
+<li>برای بازبینی اولیه، <span class="code">isPublished=false</span> بگذارید و پس از کنترل اطلاعات از پنل منتشر کنید.</li>
+<li>هر فایل حداکثر ۱۰۰۰ ردیف و ۵ مگابایت باشد؛ در Excel فقط شیت اول وارد می‌شود.</li>
+</ul><div class="warn">قالب CSV موجود فقط سرستون‌ها را دارد؛ هیچ قیمت، موجودی یا کالای نمونه‌ای در آن قرار نداده‌ایم.</div></section>
+</main></body></html>

@@ -1,3 +1,1 @@
-sku,name,slug,description,priceToman,stock,unit,brand,isPublished
-AV-001,صفحه گچی ۱۲.۵ میلی‌متر,gypsum-board-125,صفحه گچی استاندارد,185000,120,برگ,AVGOON,false
-AV-002,پروفیل استاد ۷۰,stud-profile-70,پروفیل گالوانیزه استاد,92000,350,شاخه,AVGOON,false
+sku,name,slug,description,priceToman,stock,unit,brand,categorySlug,imageUrl,isPublished
