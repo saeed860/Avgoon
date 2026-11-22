@@ -20,7 +20,8 @@
 <tr><td><span class="code">unit</span></td><td>واحد فروش؛ مانند عدد، برگ، شاخه یا بسته</td><td>اختیاری</td></tr>
 <tr><td><span class="code">brand</span></td><td>نام برند تولیدکننده</td><td>اختیاری</td></tr>
 <tr><td><span class="code">categorySlug</span></td><td>شناسه دسته‌بندی از جدول زیر</td><td>اختیاری</td></tr>
-<tr><td><span class="code">imageUrl</span></td><td>نشانی مستقیم HTTPS تصویر واقعی محصول</td><td>اختیاری</td></tr>
+<tr><td><span class="code">imageUrl</span></td><td>نشانی HTTPS تصویر اصلی؛ برای سازگاری با فایل‌های قدیمی</td><td>اختیاری</td></tr>
+<tr><td><span class="code">imageUrls</span></td><td>گالری تصاویر با جداکننده | یا ;؛ تصویر اول، تصویر اصلی است (حداکثر ۱۲ تصویر)</td><td>اختیاری</td></tr>
 <tr><td><span class="code">isPublished</span></td><td>true برای انتشار، false برای پیش‌نویس</td><td>اختیاری؛ پیش‌فرض false</td></tr>
 </tbody></table></section>
 <section class="panel"><h2 style="font-size:17px">شناسه دسته‌بندی‌ها</h2><table class="table"><thead><tr><th>نام</th><th>categorySlug</th></tr></thead><tbody>
@@ -32,9 +33,9 @@
 <section class="panel"><h2 style="font-size:17px">نکات مهم قبل از واردسازی</h2><ul class="muted">
 <li>کد کالا و نامک باید در کل فروشگاه یکتا باشند.</li>
 <li>قیمت را به تومان وارد کنید؛ مثال: <span class="code">185000</span>، بدون کاما یا واحد پول.</li>
-<li>در CSV، ستون <span class="code">imageUrl</span> فقط تصویر اصلی محصول را می‌گیرد؛ برای گالری چندتصویری، پس از واردسازی محصول را در پنل ویرایش کنید و نشانی هر تصویر HTTPS را در یک خط وارد کنید. خط اول تصویر اصلی است و حداکثر ۱۲ تصویر پذیرفته می‌شود.</li><li>نشانی تصویر باید مستقیم، عمومی و HTTPS باشد؛ تصویر باید بدون ورود به حساب قابل مشاهده باشد.</li>
+<li>برای گالری چندتصویری، نشانی‌ها را در ستون <span class="code">imageUrls</span> با جداکننده <span class="code">|</span> یا <span class="code">;</span> بنویسید؛ حداکثر ۱۲ نشانی HTTPS. اولین تصویر، تصویر اصلی است. ستون قدیمی <span class="code">imageUrl</span> نیز همچنان پشتیبانی می‌شود و در صورت استفاده هم‌زمان، تصویر اصلی ابتدا قرار می‌گیرد.</li><li>نشانی تصویر باید مستقیم، عمومی و HTTPS باشد؛ تصویر باید بدون ورود به حساب قابل مشاهده باشد.</li>
 <li>از تصویر AI یا تصویر نامرتبط با محصول استفاده نکنید.</li>
 <li>برای بازبینی اولیه، <span class="code">isPublished=false</span> بگذارید و پس از کنترل اطلاعات از پنل منتشر کنید.</li>
 <li>هر فایل حداکثر ۱۰۰۰ ردیف و ۵ مگابایت باشد؛ در Excel فقط شیت اول وارد می‌شود.</li>
-</ul><div class="warn">قالب CSV موجود فقط سرستون‌ها را دارد؛ هیچ قیمت، موجودی یا کالای نمونه‌ای در آن قرار نداده‌ایم.</div></section>
+</ul><p class="muted">نمونه مقدار ستون گالری: <span class="code">https://cdn.example.com/a.jpg|https://cdn.example.com/b.jpg</span>؛ در فایل CSV مقدار چندتصویری را داخل کوتیشن قرار دهید تا جداکننده‌های CSV با جداکننده گالری اشتباه نشوند.</p><div class="warn">قالب CSV موجود فقط سرستون‌ها را دارد؛ هیچ قیمت، موجودی یا کالای نمونه‌ای در آن قرار نداده‌ایم.</div></section>
 </main></body></html>
