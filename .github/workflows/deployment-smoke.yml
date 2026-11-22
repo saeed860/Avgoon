@@ -42,6 +42,7 @@ jobs:
           test "$admin_status" = "401"
           echo "Admin API protection PASS"
           inquiry_status=$(curl -sS -o /tmp/inquiry-invalid.json -w "%{http_code}" -X POST "$API/api/inquiries" -H "Content-Type: application/json" --data '{"name":"Smoke Test","phone":"invalid","message":"Automated validation test"}')
+          echo "Inquiry invalid-phone status=$inquiry_status body=$(cat /tmp/inquiry-invalid.json)"
           test "$inquiry_status" = "400"
           spam_status=$(curl -sS -o /tmp/inquiry-spam.json -w "%{http_code}" -X POST "$API/api/inquiries" -H "Content-Type: application/json" --data '{"name":"Bot","phone":"invalid","message":"Automated honeypot test","website":"https://spam.invalid"}')
           test "$spam_status" = "201"
