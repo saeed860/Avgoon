@@ -35,7 +35,7 @@ async function loadStoreProducts(){
     if(!r.ok)throw new Error('CATALOG_UNAVAILABLE');
     const d=await r.json();
     if(Array.isArray(d.items)){
-      products=d.items.map(p=>({id:p.id,name:p.name,category:p.categoryName||'ملزومات اجرا',sku:p.sku,tag:p.brand||p.categoryName||'محصول',price:p.priceToman?Number(p.priceToman):0,image:p.imageUrl||'',images:Array.isArray(p.images)?p.images:[],stock:Number(p.stock||0),unit:p.unit||'عدد',description:p.description||'',isDemo:false}));
+      products=d.items.map(p=>({id:p.id,slug:p.slug,technicalSpecs:p.technicalSpecs||null,name:p.name,category:p.categoryName||'ملزومات اجرا',sku:p.sku,tag:p.brand||p.categoryName||'محصول',price:p.priceToman?Number(p.priceToman):0,image:p.imageUrl||'',images:Array.isArray(p.images)?p.images:[],stock:Number(p.stock||0),unit:p.unit||'عدد',description:p.description||'',isDemo:false}));
       if(products.length){serverCatalogReady=true;document.getElementById('demoNotice').hidden=true;const validIds=new Set(products.map(p=>String(p.id)));cart=Object.fromEntries(Object.entries(cart).filter(([id])=>validIds.has(String(id))));save();renderProducts();updateCart();renderCartIfOpen()}else{showDemoCatalog()}
     }
   }catch(e){console.warn('Avgoon catalog API unavailable; showing clearly labelled demo products.',e);showDemoCatalog()}
