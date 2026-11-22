@@ -1,0 +1,24 @@
+name: AVGOON Worker CI
+on:
+  pull_request:
+    paths:
+      - 'apps/worker/**'
+      - '.github/workflows/worker-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/worker/**'
+      - '.github/workflows/worker-ci.yml'
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
