@@ -1,0 +1,1 @@
+-- Bind an idempotency key to the exact normalized checkout payload.\nALTER TABLE "Order" ADD COLUMN requestHash TEXT;\n
