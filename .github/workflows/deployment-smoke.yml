@@ -38,6 +38,12 @@ jobs:
           grep -qi "access-control-allow-origin: $WEB" /tmp/cors.headers
           grep -qi "idempotency-key" /tmp/cors.headers
           echo "CORS PASS"
+          admin_status=$(curl -sS -o /tmp/admin.json -w "%{http_code}" "$API/api/admin/products")
+          test "$admin_status" = "401"
+          echo "Admin API protection PASS"
+          otp_status=$(curl -sS -o /tmp/otp.json -w "%{http_code}" -X POST "$API/api/auth/request-otp" -H "Content-Type: application/json" --data '{"target":"smoke@example.com","channel":"email"}')
+          test "$otp_status" = "503"
+          echo "OTP correctly reports missing Resend secret (503)"
       - name: Verify latest Pages preview
         env:
           WEB: https://feature-admin-users-orders.avgoon-store.pages.dev
