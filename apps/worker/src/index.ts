@@ -105,7 +105,8 @@ app.post('/api/auth/verify-otp', async c => {
   const record=await stmt(c,"SELECT id,codeHash,attempts FROM OtpCode WHERE target=? AND channel=? AND consumedAt IS NULL AND expiresAt>? AND attempts<5 ORDER BY createdAt DESC LIMIT 1",target,channel,now()).first<any>();
   if(!record) return fail(c,400,'کد منقضی شده یا وجود ندارد');
   if(!await verifyOtp(code,record.codeHash)){await stmt(c,'UPDATE OtpCode SET attempts=attempts+1 WHERE id=?',record.id).run();return fail(c,400,'کد تأیید اشتباه است');}
-  await stmt(c,'UPDATE OtpCode SET consumedAt=? WHERE id=?',now(),record.id).run();
+  const consumed=await stmt(c,'UPDATE OtpCode SET consumedAt=? WHERE id=? AND consumedAt IS NULL AND attempts<5 RETURNING id',now(),record.id).first<any>();
+  if(!consumed)return fail(c,409,'این کد قبلاً استفاده شده است؛ کد تازه دریافت کنید');
   const userId=crypto.randomUUID();
   await stmt(c,'INSERT INTO User(id,email,name,role,createdAt) VALUES(?,?,?,\'CUSTOMER\',?) ON CONFLICT(email) DO UPDATE SET name=COALESCE(excluded.name,User.name)',userId,target,name||null,now()).run();
   const user=await stmt(c,'SELECT id,name,email,phone,role FROM User WHERE email=?',target).first<any>();
@@ -149,6 +150,20 @@ async function requireUser(c:any,next:any){
     c.set('user',user); await next();
   } catch { return fail(c,401,'ابتدا وارد حساب کاربری شوید'); }
 }
+app.get('/api/me',requireUser,async c=>{
+  const user=c.get('user') as {id:string};
+  const row=await stmt(c,'SELECT id,name,email,phone,role,createdAt FROM User WHERE id=?',user.id).first<any>();
+  return row?c.json({user:row}):fail(c,404,'حساب کاربری پیدا نشد');
+});
+app.get('/api/me/orders',requireUser,async c=>{
+  const user=c.get('user') as {id:string};
+  const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(50,Math.max(1,Number(c.req.query('limit'))||20));
+  const [{results=[]},{results:counts=[]}]=await Promise.all([
+    stmt(c,'SELECT o.id,o.status,o.totalToman,o.address,o.note,o.createdAt,COALESCE((SELECT json_group_array(json_object(\'id\',oi.id,\'quantity\',oi.quantity,\'unitPriceToman\',oi.unitPriceToman,\'product\',json_object(\'id\',p.id,\'name\',p.name,\'sku\',p.sku))) FROM OrderItem oi JOIN Product p ON p.id=oi.productId WHERE oi.orderId=o.id),\'[]\') AS items FROM "Order" o WHERE o.userId=? ORDER BY o.createdAt DESC LIMIT ? OFFSET ?',user.id,limit,(page-1)*limit).all<any>(),
+    stmt(c,'SELECT COUNT(*) AS total FROM "Order" WHERE userId=?',user.id).all<any>()
+  ]);
+  return c.json({items:results.map((x:any)=>({...x,address:x.address?JSON.parse(x.address):null,items:JSON.parse(x.items)})),total:counts[0]?.total||0,page,limit});
+});
 app.post('/api/orders',requireUser,async c=>{
   const parsed=z.object({
     items:z.array(z.object({productId:z.string().min(1),quantity:z.number().int().min(1).max(1000)})).min(1).max(50),
