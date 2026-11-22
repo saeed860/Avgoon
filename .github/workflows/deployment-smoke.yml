@@ -1,0 +1,43 @@
+name: Avgoon deployment smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/admin-users-orders
+    paths:
+      - 'docs/**'
+      - 'apps/worker/**'
+      - '.github/workflows/deployment-smoke.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify deployed Worker API and CORS
+        env:
+          API: https://avgoon-api.i-am-saeed4700.workers.dev
+          WEB: https://feature-admin-users-orders.avgoon-store.pages.dev
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl -fsS "$API/api/health" -o /tmp/health.json; then break; fi
+            sleep 5
+          done
+          node -e "const d=require('/tmp/health.json'); if(!d.ok || d.service!=='AVGOON API') process.exit(1); console.log('API health PASS:',d.runtime)"
+          curl -fsS "$API/api/categories" -o /tmp/categories.json
+          node -e "const d=require('/tmp/categories.json'); if(!Array.isArray(d)||d.length<4) process.exit(1); console.log('D1 categories PASS:',d.length)"
+          curl -fsS "$API/api/products?limit=5" -o /tmp/products.json
+          node -e "const d=require('/tmp/products.json'); if(!Array.isArray(d.items)||typeof d.total!=='number') process.exit(1); console.log('Public catalog PASS:',d.total,'products')"
+          curl -fsS -X OPTIONS "$API/api/orders" -H "Origin: $WEB" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: authorization,content-type,idempotency-key" -D /tmp/cors.headers -o /dev/null
+          grep -qi "access-control-allow-origin: $WEB" /tmp/cors.headers
+          grep -qi "idempotency-key" /tmp/cors.headers
+          echo "CORS PASS"
+      - name: Verify latest Pages preview
+        run: |
+          set -euo pipefail
+          curl -fsS "$WEB/" -o /tmp/store.html
+          grep -q "AVGOON_API_URL" <(curl -fsS "$WEB/config.js")
+          grep -q "checkoutModal" /tmp/store.html
+          echo "Pages preview PASS"
