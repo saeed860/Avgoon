@@ -27,6 +27,7 @@ const b64 = (v: Uint8Array) => btoa(Array.from(v, x => String.fromCharCode(x)).j
 const unb64 = (v: string) => Uint8Array.from(atob(v), x => x.charCodeAt(0));
 const now = () => new Date().toISOString();
 const stmt = (c: { env: Env }, query: string, ...args: any[]): D1Statement => c.env.DB.prepare(query).bind(...args);
+// Public product responses expose parsed technicalSpecs alongside the ordered gallery.
 async function attachProductImages(c:any, rows:any[]) {
   if(!rows.length)return rows;
   const ids=rows.map(r=>r.id), marks=ids.map(()=>'?').join(',');
