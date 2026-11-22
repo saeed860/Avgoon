@@ -69,13 +69,13 @@ app.get('/api/products', async c => {
   const where='p.isPublished=1 AND (p.name LIKE ? OR p.sku LIKE ?) AND (? = \'\' OR c.slug = ?)';
   const args=[pattern,pattern,category,category];
   const [{results=[]},{results:count=[]}]=await Promise.all([
-    stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,p.categoryId,p.createdAt,p.updatedAt,CASE WHEN c.id IS NULL THEN NULL ELSE json_object('id',c.id,'name',c.name,'slug',c.slug) END AS category FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
+    stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,p.categoryId,p.createdAt,p.updatedAt,c.name AS categoryName,c.slug AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
     stmt(c,`SELECT COUNT(*) AS total FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where}`,...args).all()
   ]);
   return c.json({items:results,total:count[0]?.total||0,page,limit});
 });
 app.get('/api/products/:slug', async c => {
-  const row=await stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,CASE WHEN c.id IS NULL THEN NULL ELSE json_object('id',c.id,'name',c.name,'slug',c.slug) END AS category FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE p.slug=? AND p.isPublished=1 LIMIT 1`,c.req.param('slug')).first();
+  const row=await stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,c.name AS categoryName,c.slug AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE p.slug=? AND p.isPublished=1 LIMIT 1`,c.req.param('slug')).first();
   return row ? c.json(row) : fail(c,404,'محصول پیدا نشد');
 });
 
