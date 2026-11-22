@@ -139,7 +139,7 @@ app.post('/api/auth/verify-otp', async (c) => {
   }
   await sql`UPDATE "OtpCode" SET "consumedAt"=NOW() WHERE id=${record.id}`;
   const rows = await sql`INSERT INTO "User"(id,email,name) VALUES(${crypto.randomUUID()},${target},${name || null}) ON CONFLICT(email) DO UPDATE SET name=COALESCE(EXCLUDED.name,"User".name) RETURNING id,name,email,phone,role`;
-  const user = rows[0];
+  const user = rows[0] as { id: string; role: string; name: string | null; email: string | null; phone: string | null };
   const token = await issueToken(c.env, user);
   return c.json({ token, user });
 });
