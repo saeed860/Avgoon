@@ -3,6 +3,14 @@ import { cors } from 'hono/cors';
 import { SignJWT, jwtVerify } from 'jose';
 import { z } from 'zod';
 
+type D1Result<T = Record<string, unknown>> = { results: T[]; success: boolean; meta?: Record<string, unknown> };
+type D1Statement = {
+  bind(...values: unknown[]): D1Statement;
+  all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
+  first<T = Record<string, unknown>>(): Promise<T | null>;
+  run(): Promise<D1Result>;
+};
+type D1Database = { prepare(query: string): D1Statement };
 type Env = {
   DB: D1Database;
   JWT_SECRET: string;
