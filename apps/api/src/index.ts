@@ -32,4 +32,42 @@ app.post('/api/admin/products',auth('ADMIN'),async(req,res)=>{const parsed=produ
 app.patch('/api/admin/products/:id',auth('ADMIN'),async(req,res)=>{const data:any={...req.body};if(data.priceToman!==undefined)data.priceToman=BigInt(data.priceToman);if(data.categorySlug){data.category={connect:{slug:data.categorySlug}};delete data.categorySlug}const p=await prisma.product.update({where:{id:req.params.id},data});res.json(p)});
 app.post('/api/admin/products/import',auth('ADMIN'),upload.single('file'),async(req,res)=>{if(!req.file)return fail(res,400,'فایل ارسال نشده است');const wb=XLSX.read(req.file.buffer,{type:'buffer'});const sheet=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json<Record<string,unknown>>(sheet,{defval:''});const errors:any[]=[];let created=0,updated=0;for(let i=0;i<rows.length;i++){const r=rows[i];const get=(...keys:string[])=>{for(const k of keys)if(r[k]!==undefined&&r[k]!=='')return r[k];return undefined};const raw={sku:String(get('sku','SKU','کد کالا')||''),name:String(get('name','نام محصول')||''),slug:String(get('slug','نامک')||String(get('sku','SKU','کد کالا')||'').toLowerCase().replace(/[^a-z0-9-]+/g,'-')),description:String(get('description','توضیحات')||''),priceToman:get('priceToman','قیمت تومان','قیمت'),stock:Number(get('stock','موجودی')||0),unit:String(get('unit','واحد')||'عدد'),brand:String(get('brand','برند')||''),isPublished:String(get('isPublished','انتشار')||'0').toLowerCase()==='1'||String(get('isPublished','انتشار')||'').toLowerCase()==='true'};const parsed=productSchema.safeParse(raw);if(!parsed.success){errors.push({row:i+2,sku:raw.sku,message:'کد کالا، نام یا مقادیر نامعتبر'});continue}const {priceToman,...d}=parsed.data;try{const existing=await prisma.product.findUnique({where:{sku:d.sku}});await prisma.product.upsert({where:{sku:d.sku},create:{...d,priceToman:priceToman?BigInt(priceToman):null},update:{...d,priceToman:priceToman?BigInt(priceToman):null}});existing?updated++:created++}catch(e){errors.push({row:i+2,sku:d.sku,message:'خطا در ثبت؛ احتمالاً نامک تکراری است'})}}res.json({ok:errors.length===0,created,updated,failed:errors.length,errors})});
 app.get('/api/admin/orders',auth('ADMIN'),async(_req,res)=>res.json(await prisma.order.findMany({include:{user:true,items:{include:{product:true}}},orderBy:{createdAt:'desc'},take:100})));
+
+const orderStatuses=['PENDING','PAID','PROCESSING','SHIPPED','COMPLETED','CANCELLED'] as const;
+const jsonSafe=(value:any)=>JSON.parse(JSON.stringify(value,(_key,v)=>typeof v==='bigint'?v.toString():v));
+app.get('/api/admin/summary',auth('ADMIN'),async(_req,res)=>{
+ const [users,orders,pending,paid]=await Promise.all([
+  prisma.user.count(),prisma.order.count(),prisma.order.count({where:{status:'PENDING'}}),
+  prisma.order.aggregate({where:{status:{in:['PAID','PROCESSING','SHIPPED','COMPLETED']}},_sum:{totalToman:true}})
+ ]);
+ res.json({users,orders,pendingOrders:pending,paidTotalToman:String(paid._sum.totalToman||0n)});
+});
+app.get('/api/admin/users',auth('ADMIN'),async(req,res)=>{
+ const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(100,Math.max(1,Number(req.query.limit)||25)),q=String(req.query.q||'').trim();
+ const where:any=q?{OR:[{name:{contains:q,mode:'insensitive'}},{phone:{contains:q}},{email:{contains:q,mode:'insensitive'}}]}:{};
+ const [items,total]=await Promise.all([
+  prisma.user.findMany({where,select:{id:true,name:true,phone:true,email:true,role:true,createdAt:true,_count:{select:{orders:true}}},orderBy:{createdAt:'desc'},skip:(page-1)*limit,take:limit}),
+  prisma.user.count({where})
+ ]);
+ res.json({items,total,page,limit});
+});
+app.get('/api/admin/orders',auth('ADMIN'),async(req,res)=>{
+ const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(100,Math.max(1,Number(req.query.limit)||25));
+ const status=String(req.query.status||''),where:any={};
+ if(status&&orderStatuses.includes(status as any))where.status=status;
+ const [items,total]=await Promise.all([
+  prisma.order.findMany({where,include:{user:{select:{id:true,name:true,phone:true,email:true}},items:{include:{product:{select:{id:true,name:true,sku:true}}}}},orderBy:{createdAt:'desc'},skip:(page-1)*limit,take:limit}),
+  prisma.order.count({where})
+ ]);
+ res.json({items:jsonSafe(items),total,page,limit});
+});
+app.patch('/api/admin/orders/:id/status',auth('ADMIN'),async(req,res)=>{
+ const parsed=z.object({status:z.enum(orderStatuses)}).safeParse(req.body);
+ if(!parsed.success)return fail(res,400,'وضعیت سفارش معتبر نیست');
+ try{
+  const order=await prisma.order.update({where:{id:req.params.id},data:{status:parsed.data.status},include:{user:{select:{id:true,name:true,phone:true,email:true}},items:{include:{product:{select:{id:true,name:true,sku:true}}}}}});
+  res.json(jsonSafe(order));
+ }catch{return fail(res,404,'سفارش پیدا نشد')}
+});
+
 app.listen(Number(process.env.API_PORT)||4000,()=>console.info(`AVGOON API listening on ${process.env.API_PORT||4000}`));
