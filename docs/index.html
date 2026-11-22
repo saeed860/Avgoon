@@ -25,7 +25,7 @@ async function loadStoreProducts(){
     if(!r.ok)throw new Error('CATALOG_UNAVAILABLE');
     const d=await r.json();
     if(Array.isArray(d.items)&&d.items.length){
-      products=d.items.map(p=>({id:p.id,name:p.name,category:p.category?.name||'ملزومات',sku:p.sku,tag:p.brand||p.category?.name||'محصول',price:p.priceToman?Number(p.priceToman):0,image:p.imageUrl||base,stock:Number(p.stock||0),unit:p.unit||'عدد',description:p.description||''}));
+      products=d.items.map(p=>({id:p.id,name:p.name,category:p.categoryName||'ملزومات',sku:p.sku,tag:p.brand||p.categoryName||'محصول',price:p.priceToman?Number(p.priceToman):0,image:p.imageUrl||base,stock:Number(p.stock||0),unit:p.unit||'عدد',description:p.description||''}));
       serverCatalogReady=true;renderProducts();updateCart();renderCartIfOpen();
     }
   }catch(e){console.warn('Avgoon catalog API unavailable; showing local preview catalog.',e)}
