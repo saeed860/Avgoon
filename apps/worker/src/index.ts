@@ -33,7 +33,7 @@ async function attachProductImages(c:any, rows:any[]) {
   const {results=[]}=await stmt(c,`SELECT productId,url,alt,sortOrder,isPrimary FROM ProductImage WHERE productId IN (${marks}) ORDER BY productId,sortOrder`,...ids).all<any>();
   const grouped=new Map<string,any[]>();
   for(const image of results){const list=grouped.get(image.productId)||[];list.push({url:image.url,alt:image.alt||'',sortOrder:image.sortOrder,isPrimary:!!image.isPrimary});grouped.set(image.productId,list);}
-  return rows.map(row=>{const images=grouped.get(row.id)||[];return {...row,images,imageUrl:images.find(x=>x.isPrimary)?.url||images[0]?.url||row.imageUrl};});
+  return rows.map(row=>{const images=grouped.get(row.id)||[];let technicalSpecs=row.technicalSpecs??null;if(typeof technicalSpecs==='string'){try{technicalSpecs=JSON.parse(technicalSpecs)}catch{technicalSpecs=null}}return {...row,technicalSpecs,images,imageUrl:images.find(x=>x.isPrimary)?.url||images[0]?.url||row.imageUrl};});
 }
 async function replaceProductImages(c:any, productId:string, images:{url:string;alt?:string}[]) {
   const statements=[stmt(c,'DELETE FROM ProductImage WHERE productId=?',productId),...images.map((image,index)=>stmt(c,'INSERT INTO ProductImage(id,productId,url,alt,sortOrder,isPrimary,createdAt) VALUES(?,?,?,?,?,?,?)',crypto.randomUUID(),productId,image.url,image.alt||null,index,index===0?1:0,now()))];
@@ -118,13 +118,13 @@ app.get('/api/products', async c => {
   const where='p.isPublished=1 AND (p.name LIKE ? OR p.sku LIKE ?) AND (? = \'\' OR c.slug = ?)';
   const args=[pattern,pattern,category,category];
   const [{results=[]},{results:count=[]}]=await Promise.all([
-    stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,p.categoryId,p.createdAt,p.updatedAt,c.name AS categoryName,c.slug AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
+    stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.technicalSpecs,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,p.categoryId,p.createdAt,p.updatedAt,c.name AS categoryName,c.slug AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
     stmt(c,`SELECT COUNT(*) AS total FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where}`,...args).all()
   ]);
   return c.json({items:await attachProductImages(c,results),total:count[0]?.total||0,page,limit});
 });
 app.get('/api/products/:slug', async c => {
-  const row=await stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,c.name AS categoryName,c.slug AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE p.slug=? AND p.isPublished=1 LIMIT 1`,c.req.param('slug')).first();
+  const row=await stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.technicalSpecs,p.priceToman,p.stock,p.unit,p.imageUrl,p.brand,p.isPublished,c.name AS categoryName,c.slug AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE p.slug=? AND p.isPublished=1 LIMIT 1`,c.req.param('slug')).first();
   if(!row)return fail(c,404,'محصول پیدا نشد');
   const [withImages]=await attachProductImages(c,[row]);
   return c.json(withImages);
@@ -297,7 +297,7 @@ app.get('/api/admin/products',async c=>{
   const where="(?='' OR p.name LIKE ? OR p.sku LIKE ?) AND (?='' OR c.slug=?) AND (?='' OR p.isPublished=?)"+stockWhere;
   const args=[q,like,like,category,category,published,published===''?0:Number(published)];
   const [{results=[]},{results:counts=[]}]=await Promise.all([
-    stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.brand,p.imageUrl,p.isPublished,p.createdAt,p.updatedAt,COALESCE(c.name,'') AS categoryName,COALESCE(c.slug,'') AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
+    stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.technicalSpecs,p.priceToman,p.stock,p.unit,p.brand,p.imageUrl,p.isPublished,p.createdAt,p.updatedAt,COALESCE(c.name,'') AS categoryName,COALESCE(c.slug,'') AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
     stmt(c,`SELECT COUNT(*) AS total FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where}`,...args).all()
   ]);
   return c.json({items:await attachProductImages(c,results),total:counts[0]?.total||0,page,limit});
@@ -340,13 +340,13 @@ app.patch('/api/admin/orders/:id/status',async c=>{
   return row?c.json(row):fail(c,409,'وضعیت سفارش هم‌زمان تغییر کرده است؛ دوباره فهرست را تازه‌سازی کنید');
 });
 app.post('/api/admin/products',async c=>{
-  const p=z.object({sku:z.string().trim().min(1).max(80),name:z.string().trim().min(2).max(200),slug:z.string().trim().min(2).max(220),description:z.string().max(5000).optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\d+$/)]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().trim().min(1).max(30).default('عدد'),brand:z.string().trim().max(100).optional(),categorySlug:z.string().max(120).optional(),imageUrl:z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد').optional(),images:z.array(z.object({url:z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد'),alt:z.string().max(300).optional()})).max(12).optional(),isPublished:z.boolean().default(false)}).safeParse(await c.req.json().catch(()=>null));
+  const p=z.object({sku:z.string().trim().min(1).max(80),name:z.string().trim().min(2).max(200),slug:z.string().trim().min(2).max(220),description:z.string().max(5000).optional(),technicalSpecs:z.record(z.string(),z.unknown()).nullable().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\d+$/)]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().trim().min(1).max(30).default('عدد'),brand:z.string().trim().max(100).optional(),categorySlug:z.string().max(120).optional(),imageUrl:z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد').optional(),images:z.array(z.object({url:z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد'),alt:z.string().max(300).optional()})).max(12).optional(),isPublished:z.boolean().default(false)}).safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return c.json({ok:false,errors:p.error.flatten()},400);
   const x=p.data,id=crypto.randomUUID(),time=now();
   const category=x.categorySlug?await stmt(c,'SELECT id FROM Category WHERE slug=?',x.categorySlug).first<any>():null;
   if(x.categorySlug&&!category)return fail(c,400,'دسته‌بندی پیدا نشد');
   try{
-    await stmt(c,`INSERT INTO Product(id,sku,name,slug,description,priceToman,stock,unit,brand,imageUrl,isPublished,categoryId,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,id,x.sku,x.name,x.slug,x.description||null,x.priceToman===undefined?null:String(x.priceToman),x.stock,x.unit,x.brand||null,x.images?.[0]?.url||x.imageUrl||null,x.isPublished?1:0,category?.id||null,time,time).run();
+    await stmt(c,`INSERT INTO Product(id,sku,name,slug,description,technicalSpecs,priceToman,stock,unit,brand,imageUrl,isPublished,categoryId,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,id,x.sku,x.name,x.slug,x.description||null,x.technicalSpecs?JSON.stringify(x.technicalSpecs):null,x.priceToman===undefined?null:String(x.priceToman),x.stock,x.unit,x.brand||null,x.images?.[0]?.url||x.imageUrl||null,x.isPublished?1:0,category?.id||null,time,time).run();
     if(x.images)await replaceProductImages(c,id,x.images);
     return c.json({id,sku:x.sku,name:x.name,slug:x.slug,priceToman:x.priceToman??null,stock:x.stock,isPublished:x.isPublished,images:x.images||[]},201);
   }catch{return fail(c,409,'کد کالا یا نشانی محصول تکراری است');}
