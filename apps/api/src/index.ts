@@ -22,9 +22,9 @@ app.post('/api/admin/bootstrap',async(req,res)=>{
  const parsed=z.object({token:z.string().min(32).max(512),channel:z.enum(['phone','email']),target:z.string().min(5).max(150)}).safeParse(req.body);
  if(!parsed.success)return fail(res,400,'اطلاعات واردشده معتبر نیست');
  const {channel}=parsed.data;
- const target=channel==='email'?parsed.data.target.trim().toLowerCase():parsed.data.target.replace(/[\\s-]/g,'');
- if(channel==='email'&&!/^\\S+@\\S+\\.\\S+$/.test(target))return fail(res,400,'ایمیل معتبر نیست');
- if(channel==='phone'&&!/^\\+?[0-9]{10,15}$/.test(target))return fail(res,400,'شماره موبایل معتبر نیست');
+ const target=channel==='email'?parsed.data.target.trim().toLowerCase():parsed.data.target.replace(/[\s-]/g,'');
+ if(channel==='email'&&!/^\S+@\S+\.\S+$/.test(target))return fail(res,400,'ایمیل معتبر نیست');
+ if(channel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target))return fail(res,400,'شماره موبایل معتبر نیست');
  try{
   const admin=await prisma.$transaction(async tx=>{
    if(await tx.user.count({where:{role:'ADMIN'}})>0)throw new Error('ADMIN_EXISTS');
