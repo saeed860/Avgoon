@@ -274,11 +274,12 @@ app.get('/api/admin/summary',async c=>{
   return c.json(row);
 });
 app.get('/api/admin/products',async c=>{
-  const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||50)),q=(c.req.query('q')||'').trim(),like='%'+q+'%';
-  const where="(?='' OR p.name LIKE ? OR p.sku LIKE ?)";
+  const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||50)),q=(c.req.query('q')||'').trim(),like='%'+q+'%',category=(c.req.query('category')||'').trim(),published=c.req.query('published')||'';
+  const where="(?='' OR p.name LIKE ? OR p.sku LIKE ?) AND (?='' OR c.slug=?) AND (?='' OR p.isPublished=?)";
+  const args=[q,like,like,category,category,published,published===''?0:Number(published)];
   const [{results=[]},{results:counts=[]}]=await Promise.all([
-    stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.brand,p.imageUrl,p.isPublished,p.createdAt,p.updatedAt,COALESCE(c.name,'') AS categoryName,COALESCE(c.slug,'') AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,q,like,like,limit,(page-1)*limit).all(),
-    stmt(c,`SELECT COUNT(*) AS total FROM Product p WHERE ${where}`,q,like,like).all()
+    stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.brand,p.imageUrl,p.isPublished,p.createdAt,p.updatedAt,COALESCE(c.name,'') AS categoryName,COALESCE(c.slug,'') AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
+    stmt(c,`SELECT COUNT(*) AS total FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where}`,...args).all()
   ]);
   return c.json({items:results,total:counts[0]?.total||0,page,limit});
 });
