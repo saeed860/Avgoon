@@ -16,11 +16,25 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: avgoon_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d avgoon_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: apps/api
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/avgoon_ci?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/avgoon_ci
       JWT_SECRET: ci-only-secret-not-for-production
     steps:
       - uses: actions/checkout@v4
@@ -31,3 +45,9 @@ jobs:
       - run: npx prisma validate
       - run: npx prisma generate
       - run: npm run build
+      - name: Validate address migration against PostgreSQL
+        run: |
+          npx prisma db push --skip-generate
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'DROP TABLE "Address"'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20261122110000_user_profile_addresses/migration.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT indexname FROM pg_indexes WHERE indexname = 'Address_one_default_per_user_idx'"
