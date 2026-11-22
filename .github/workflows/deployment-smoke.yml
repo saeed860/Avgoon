@@ -82,6 +82,8 @@ jobs:
           grep -q "demoNotice" /tmp/store.html
           echo "Clearly labelled non-orderable demo catalog PASS"
           if grep -q "۰۲۱-۹۱۰۰۴۰۸۰\|info@avgoon.ir" /tmp/store.html; then echo "Unverified placeholder contact data found"; exit 1; fi
+          grep -q "photo-thumbs" /tmp/store.html
+          grep -q "setProductCardImage" /tmp/store.html
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
           echo "Admin response bytes: $(wc -c < /tmp/admin.html)"
@@ -93,7 +95,11 @@ jobs:
           curl -fsSL "$WEB/product-import-guide.html" -o /tmp/product-import-guide.html
           grep -q "categorySlug" /tmp/product-import-guide.html
           grep -q "loadInquiries" /tmp/admin.html
-          echo "Admin product editor PASS"
+          grep -q "pImages" /tmp/admin.html
+          grep -q "readProductImages" /tmp/admin.html
+          grep -q "pGalleryPreview" /tmp/admin.html
+          grep -q "گالری چندتصویری" /tmp/product-import-guide.html
+          echo "Admin product editor and image gallery PASS"
           grep -q "xlsx.full.min.js" /tmp/admin.html
           curl -fsSL "$WEB/product-import-template.csv" -o /tmp/product-template.csv
           test "$(wc -l < /tmp/product-template.csv)" -eq 1
