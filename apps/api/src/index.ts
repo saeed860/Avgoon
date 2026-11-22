@@ -9,7 +9,6 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { timingSafeEqual, randomInt } from 'node:crypto';
-import nodemailer from 'nodemailer';
 import { Prisma, PrismaClient } from '@prisma/client';
 
 const app=express(); const prisma=new PrismaClient(); const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024}});
@@ -54,19 +53,19 @@ app.get('/api/products',async(req,res)=>{const page=Math.max(1,Number(req.query.
 app.get('/api/products/:slug',async(req,res)=>{const p=await prisma.product.findUnique({where:{slug:String(req.params.slug)},include:{category:true}});if(!p||!p.isPublished)return fail(res,404,'محصول پیدا نشد');res.json(p)});
 const otpSchema=z.object({target:z.string().min(5).max(150),channel:z.enum(['phone','email'])});
 app.post('/api/auth/request-otp',async(req,res)=>{const parsed=otpSchema.safeParse(req.body);if(!parsed.success)return fail(res,400,'اطلاعات ورود معتبر نیست');const {target,channel}=parsed.data;if(channel==='email'&&!/^\S+@\S+\.\S+$/.test(target))return fail(res,400,'ایمیل معتبر نیست');if(channel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target.replace(/[\s-]/g,'')))return fail(res,400,'شماره موبایل معتبر نیست');const code=String(randomInt(100000,1000000));const codeHash=await bcrypt.hash(code,10);const otpRecord=await prisma.otpCode.create({data:{target,channel,codeHash,expiresAt:new Date(Date.now()+5*60*1000)}});
-// Email OTP is delivered through SMTP. SMS remains disabled until a provider-specific adapter is configured.
-const mailConfigured=Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASS&&process.env.SMTP_FROM);
-if(channel==='email'&&mailConfigured){
+// Resend's HTTPS API works on free web hosts that block outbound SMTP ports.
+const resendConfigured=Boolean(process.env.RESEND_API_KEY&&process.env.RESEND_FROM);
+if(channel==='email'&&resendConfigured){
  try{
-  const transporter=nodemailer.createTransport({host:process.env.SMTP_HOST,port:Number(process.env.SMTP_PORT)||587,secure:process.env.SMTP_SECURE==='true',auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASS}});
-  await transporter.sendMail({from:process.env.SMTP_FROM,to:target,subject:'کد ورود آوگون',text:`کد تأیید ورود شما: ${code}\nاین کد تا ۵ دقیقه معتبر است. اگر این درخواست از طرف شما نیست، این پیام را نادیده بگیرید.`});
+  const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.RESEND_FROM,to:[target],subject:'کد ورود آوگون',text:`کد تأیید ورود شما: ${code}\nاین کد تا ۵ دقیقه معتبر است. اگر این درخواست از طرف شما نیست، این پیام را نادیده بگیرید.`})});
+  if(!response.ok)throw new Error(`RESEND_HTTP_${response.status}`);
   return res.json({ok:true,message:'کد تأیید به ایمیل شما ارسال شد.'});
  }catch(error){
   await prisma.otpCode.update({where:{id:otpRecord.id},data:{consumedAt:new Date()}}).catch(()=>undefined);
   return fail(res,502,'ارسال ایمیل ناموفق بود؛ کمی بعد دوباره تلاش کنید');
  }
 }
-if(process.env.NODE_ENV==='production')return fail(res,503,channel==='phone'?'ارسال پیامک هنوز به ارائه‌دهنده پیامک متصل نشده است':'سرویس SMTP ایمیل هنوز پیکربندی نشده است');
+if(process.env.NODE_ENV==='production')return fail(res,503,channel==='phone'?'ارسال پیامک هنوز به ارائه‌دهنده پیامک متصل نشده است':'سرویس ایمیل هنوز پیکربندی نشده است');
 console.info(`[AVGOON OTP DEVELOPMENT ONLY] ${channel}:${target} code=${code}`);
 res.json({ok:true,development:true,message:'در محیط توسعه، کد فقط در لاگ سرور ثبت شده است؛ ارسال واقعی فعال نیست.'})});
 app.post('/api/auth/verify-otp',async(req,res)=>{const parsed=z.object({target:z.string().min(5).max(150),channel:z.enum(['phone','email']),code:z.string().length(6),name:z.string().trim().min(2).max(120).optional()}).safeParse(req.body);if(!parsed.success)return fail(res,400,'کد یا اطلاعات ورود نامعتبر است');const {target,channel,code,name}=parsed.data;const record=await prisma.otpCode.findFirst({where:{target,channel,consumedAt:null,expiresAt:{gt:new Date()},attempts:{lt:5}},orderBy:{createdAt:'desc'}});if(!record)return fail(res,400,'کد منقضی شده یا وجود ندارد');if(!await bcrypt.compare(code,record.codeHash)){await prisma.otpCode.update({where:{id:record.id},data:{attempts:{increment:1}}});return fail(res,400,'کد تأیید اشتباه است')};await prisma.otpCode.update({where:{id:record.id},data:{consumedAt:new Date()}});const where=channel==='phone'?{phone:target}:{email:target};const create=channel==='phone'?{phone:target,name:name||null}:{email:target,name:name||null};const user=await prisma.user.upsert({where,create,update:name?{name}:{}});const token=jwt.sign({sub:user.id,role:user.role},secret,{expiresIn:'7d'});res.json({token,user:{id:user.id,name:user.name,phone:user.phone,email:user.email,role:user.role}})});
