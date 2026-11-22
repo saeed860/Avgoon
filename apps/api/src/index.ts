@@ -50,7 +50,7 @@ function auth(requiredRole?:'ADMIN'){return async(req:express.Request,res:expres
 app.get('/api/health',(_req,res)=>res.json({ok:true,service:'AVGOON API',time:new Date().toISOString()}));
 app.get('/api/categories',async(_req,res)=>res.json(await prisma.category.findMany({orderBy:{name:'asc'}})));
 app.get('/api/products',async(req,res)=>{const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(60,Math.max(1,Number(req.query.limit)||24));const q=String(req.query.q||'');const where:any={isPublished:true};if(q)where.OR=[{name:{contains:q,mode:'insensitive'}},{sku:{contains:q,mode:'insensitive'}}];if(req.query.category)where.category={slug:String(req.query.category)};const [items,total]=await Promise.all([prisma.product.findMany({where,include:{category:true},skip:(page-1)*limit,take:limit,orderBy:{createdAt:'desc'}}),prisma.product.count({where})]);res.json({items,total,page,limit})});
-app.get('/api/products/:slug',async(req,res)=>{const p=await prisma.product.findUnique({where:{slug:req.params.slug},include:{category:true}});if(!p||!p.isPublished)return fail(res,404,'محصول پیدا نشد');res.json(p)});
+app.get('/api/products/:slug',async(req,res)=>{const p=await prisma.product.findUnique({where:{slug:String(req.params.slug)},include:{category:true}});if(!p||!p.isPublished)return fail(res,404,'محصول پیدا نشد');res.json(p)});
 const otpSchema=z.object({target:z.string().min(5).max(150),channel:z.enum(['phone','email'])});
 app.post('/api/auth/request-otp',async(req,res)=>{const parsed=otpSchema.safeParse(req.body);if(!parsed.success)return fail(res,400,'اطلاعات ورود معتبر نیست');const {target,channel}=parsed.data;if(channel==='email'&&!/^\S+@\S+\.\S+$/.test(target))return fail(res,400,'ایمیل معتبر نیست');if(channel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target.replace(/[\s-]/g,'')))return fail(res,400,'شماره موبایل معتبر نیست');const code=String(Math.floor(100000+Math.random()*900000));const codeHash=await bcrypt.hash(code,10);await prisma.otpCode.create({data:{target,channel,codeHash,expiresAt:new Date(Date.now()+5*60*1000)}});
 // Delivery is intentionally fail-closed: configure an SMS/SMTP adapter before production. Never expose OTP in production responses.
@@ -96,7 +96,7 @@ app.patch('/api/admin/orders/:id/status',auth('ADMIN'),async(req,res)=>{
  const parsed=z.object({status:z.enum(orderStatuses)}).safeParse(req.body);
  if(!parsed.success)return fail(res,400,'وضعیت سفارش معتبر نیست');
  try{
-  const order=await prisma.order.update({where:{id:req.params.id},data:{status:parsed.data.status},include:{user:{select:{id:true,name:true,phone:true,email:true}},items:{include:{product:{select:{id:true,name:true,sku:true}}}}}});
+  const order=await prisma.order.update({where:{id:String(req.params.id)},data:{status:parsed.data.status},include:{user:{select:{id:true,name:true,phone:true,email:true}},items:{include:{product:{select:{id:true,name:true,sku:true}}}}}});
   res.json(jsonSafe(order));
  }catch{return fail(res,404,'سفارش پیدا نشد')}
 });
