@@ -50,6 +50,9 @@ jobs:
           inquiry_admin_status=$(curl -sS -o /tmp/inquiry-admin.json -w "%{http_code}" "$API/api/admin/inquiries")
           test "$inquiry_admin_status" = "401"
           echo "Inquiry validation, honeypot and admin authorization PASS"
+          valid_inquiry_status=$(curl -sS -o /tmp/inquiry-valid.json -w "%{http_code}" -X POST "$API/api/inquiries" -H "Content-Type: application/json" --data '{"name":"AVGOON CI TEST","phone":"+4915112345678","email":"ci@example.invalid","projectType":"Smoke test","message":"Automated integration test record; delete after verification."}')
+          echo "Valid inquiry insert status=$valid_inquiry_status body=$(cat /tmp/inquiry-valid.json)"
+          test "$valid_inquiry_status" = "201"
           otp_status=$(curl -sS -o /tmp/otp.json -w "%{http_code}" -X POST "$API/api/auth/request-otp" -H "Content-Type: application/json" --data '{"target":"smoke@example.com","channel":"email"}')
           test "$otp_status" = "503"
           echo "OTP correctly reports missing Resend secret (503)"
