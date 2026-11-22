@@ -124,7 +124,7 @@ jobs:
           if not Path('/tmp/admin.html.js').stat().st_size:
               raise SystemExit('Admin inline JavaScript was not found')
           PY
-          for jsfile in /tmp/admin.html.js /tmp/first-admin.html.js; do
+          for jsfile in /tmp/store.html.js /tmp/admin.html.js /tmp/first-admin.html.js; do
             if test -s "$jsfile"; then
               if ! node --check "$jsfile" >/tmp/js-check.log 2>&1; then
                 echo "JavaScript syntax failed: $jsfile"
