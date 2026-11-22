@@ -54,11 +54,11 @@ app.get('/api/products/:slug',async(req,res)=>{const p=await prisma.product.find
 const otpSchema=z.object({target:z.string().min(5).max(150),channel:z.enum(['phone','email'])});
 app.post('/api/auth/request-otp',async(req,res)=>{const parsed=otpSchema.safeParse(req.body);if(!parsed.success)return fail(res,400,'اطلاعات ورود معتبر نیست');const {target,channel}=parsed.data;if(channel==='email'&&!/^\S+@\S+\.\S+$/.test(target))return fail(res,400,'ایمیل معتبر نیست');if(channel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target.replace(/[\s-]/g,'')))return fail(res,400,'شماره موبایل معتبر نیست');const code=String(randomInt(100000,1000000));const codeHash=await bcrypt.hash(code,10);const otpRecord=await prisma.otpCode.create({data:{target,channel,codeHash,expiresAt:new Date(Date.now()+5*60*1000)}});
 // Resend's HTTPS API works on free web hosts that block outbound SMTP ports.
-const resendConfigured=Boolean(process.env.BREVO_API_KEY&&process.env.BREVO_SENDER_EMAIL);
-if(channel==='email'&&resendConfigured){
+const brevoConfigured=Boolean(process.env.BREVO_API_KEY&&process.env.BREVO_SENDER_EMAIL);
+if(channel==='email'&&brevoConfigured){
  try{
   const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':process.env.BREVO_API_KEY!,'Content-Type':'application/json'},body:JSON.stringify({sender:{name:'آوگون',email:process.env.BREVO_SENDER_EMAIL},to:[{email:target}],subject:'کد ورود آوگون',textContent:`کد تأیید ورود شما: ${code}\nاین کد تا ۵ دقیقه معتبر است. اگر این درخواست از طرف شما نیست، این پیام را نادیده بگیرید.`})});
-  if(!response.ok)throw new Error(`RESEND_HTTP_${response.status}`);
+  if(!response.ok)throw new Error(`BREVO_HTTP_${response.status}`);
   return res.json({ok:true,message:'کد تأیید به ایمیل شما ارسال شد.'});
  }catch(error){
   await prisma.otpCode.update({where:{id:otpRecord.id},data:{consumedAt:new Date()}}).catch(()=>undefined);
