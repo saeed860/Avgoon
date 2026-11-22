@@ -223,6 +223,15 @@ app.get('/api/admin/summary',async c=>{
   const row=await stmt(c,`SELECT (SELECT COUNT(*) FROM User) AS users,(SELECT COUNT(*) FROM "Order") AS orders,(SELECT COUNT(*) FROM "Order" WHERE status='PENDING') AS pendingOrders,(SELECT COALESCE(SUM(totalToman),0) FROM "Order" WHERE status IN ('PAID','PROCESSING','SHIPPED','COMPLETED')) AS paidTotalToman`).first<any>();
   return c.json(row);
 });
+app.get('/api/admin/products',async c=>{
+  const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||50)),q=(c.req.query('q')||'').trim(),like='%'+q+'%';
+  const where="(?='' OR p.name LIKE ? OR p.sku LIKE ?)";
+  const [{results=[]},{results:counts=[]}]=await Promise.all([
+    stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.brand,p.imageUrl,p.isPublished,p.createdAt,p.updatedAt,COALESCE(c.name,'') AS categoryName,COALESCE(c.slug,'') AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,q,like,like,limit,(page-1)*limit).all(),
+    stmt(c,`SELECT COUNT(*) AS total FROM Product p WHERE ${where}`,q,like,like).all()
+  ]);
+  return c.json({items:results,total:counts[0]?.total||0,page,limit});
+});
 app.get('/api/admin/users',async c=>{
   const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||25)),q=(c.req.query('q')||'').trim(),like='%'+q+'%';
   const where="(?='' OR COALESCE(u.name,'') LIKE ? OR COALESCE(u.phone,'') LIKE ? OR COALESCE(u.email,'') LIKE ?)";
