@@ -107,7 +107,7 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const html = fs.readFileSync('/tmp/store.html','utf8');
-          const safeAddCart = html.includes("addCart('${esc(p.id)}')") || /addCart\(\s*\\*'\s*\+\s*esc\(p\.id\)\s*\+\s*\\*'\)/.test(html);
+          const safeAddCart = html.includes("addCart('\\\\''+esc(p.id)+'\\\\')");
           if (!safeAddCart || !html.includes("qty('${esc(p.id)}',-1)")) {
             throw new Error('UUID product IDs are not quoted in cart actions');
           }
