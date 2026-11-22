@@ -168,13 +168,11 @@ app.post('/api/orders',requireUser,async c=>{
   const products=await stmt(c,`SELECT id,name,sku,priceToman,stock,isPublished FROM Product WHERE id IN (${placeholders})`,...ids).all<any>();
   if(products.results.length!==ids.length)return fail(c,400,'یک یا چند کالا پیدا نشد');
   const byId=new Map(products.results.map((p:any)=>[p.id,p]));
+  for(const item of parsed.data.items){const p:any=byId.get(item.productId);if(!p.isPublished)return fail(c,409,'یکی از کالاها در حال حاضر قابل سفارش نیست');if(p.priceToman===null||p.priceToman===undefined)return fail(c,409,'قیمت یکی از کالاها هنوز ثبت نشده است');if(Number(p.stock)<item.quantity)return fail(c,409,'موجودی یکی از کالاها کافی نیست');}
   let total=0n;
   const orderId=crypto.randomUUID(), created=now();
   const orderItems=parsed.data.items.map(item=>{
     const p:any=byId.get(item.productId);
-    if(!p.isPublished)throw new Error('PRODUCT_UNAVAILABLE');
-    if(p.priceToman===null||p.priceToman===undefined)throw new Error('PRICE_UNAVAILABLE');
-    if(Number(p.stock)<item.quantity)throw new Error('INSUFFICIENT_STOCK');
     const price=BigInt(String(p.priceToman)); total+=price*BigInt(item.quantity);
     return {id:crypto.randomUUID(),productId:p.id,quantity:item.quantity,unitPriceToman:String(price)};
   });
