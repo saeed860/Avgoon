@@ -49,18 +49,18 @@ jobs:
           WEB: https://d94744bf.avgoon-store.pages.dev
         run: |
           set -euo pipefail
-          curl -fsS "$WEB/" -o /tmp/store.html
-          grep -q "AVGOON_API_URL" <(curl -fsS "$WEB/config.js")
+          curl -fsSL "$WEB/" -o /tmp/store.html
+          grep -q "AVGOON_API_URL" <(curl -fsSL "$WEB/config.js")
           grep -q "checkoutModal" /tmp/store.html
           echo "Storefront HTML PASS"
-          curl -fsS "$WEB/admin.html" -o /tmp/admin.html
+          curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
           echo "Admin response bytes: $(wc -c < /tmp/admin.html)"
           grep -o ".\{0,40\}editProduct.\{0,40\}" /tmp/admin.html | head -3 || true
           grep -q "editProduct" /tmp/admin.html
           echo "Admin product editor PASS"
           grep -q "xlsx.full.min.js" /tmp/admin.html
           echo "Excel import UI PASS"
-          curl -fsS "$WEB/first-admin.html" -o /tmp/first-admin.html
+          curl -fsSL "$WEB/first-admin.html" -o /tmp/first-admin.html
           grep -q "/api/admin/bootstrap" /tmp/first-admin.html
           echo "First admin setup PASS"
           echo "Pages storefront, product editor, Excel import and first-admin setup PASS"
