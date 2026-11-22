@@ -54,6 +54,8 @@ jobs:
           grep -q "checkoutModal" /tmp/store.html
           echo "Storefront HTML PASS"
           curl -fsS "$WEB/admin.html" -o /tmp/admin.html
+          echo "Admin response bytes: $(wc -c < /tmp/admin.html)"
+          grep -o ".\{0,40\}editProduct.\{0,40\}" /tmp/admin.html | head -3 || true
           grep -q "editProduct" /tmp/admin.html
           echo "Admin product editor PASS"
           grep -q "xlsx.full.min.js" /tmp/admin.html
