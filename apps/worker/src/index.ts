@@ -101,7 +101,7 @@ app.post('/api/auth/request-otp', async (c) => {
   if (channel === 'email' && !/^\S+@\S+\.\S+$/.test(target)) return fail(c, 400, 'ایمیل معتبر نیست');
   if (channel === 'phone' && !/^\+?[0-9]{10,15}$/.test(target)) return fail(c, 400, 'شماره موبایل معتبر نیست');
   if (channel === 'phone') return fail(c, 503, 'ورود با پیامک هنوز به ارائه‌دهنده پیامک متصل نشده است');
-  if (!c.env.RESEND_API_KEY || !c.env.RESEND_FROM) return fail(c, 503, 'سرویس ایمیل هنوز پیکربندی نشده است');
+  if (!c.env.BREVO_API_KEY || !c.env.BREVO_SENDER_EMAIL) return fail(c, 503, 'سرویس ایمیل هنوز پیکربندی نشده است');
   const sql = db(c.env);
   const recent = await sql`SELECT COUNT(*)::int AS n FROM "OtpCode" WHERE target=${target} AND channel='email' AND "createdAt">NOW()-INTERVAL '15 minutes'`;
   if ((recent[0]?.n || 0) >= 5) return fail(c, 429, 'تعداد درخواست‌ها بیش از حد مجاز است؛ بعداً دوباره تلاش کنید');
