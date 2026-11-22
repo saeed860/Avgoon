@@ -8,11 +8,41 @@ import * as XLSX from 'xlsx';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { timingSafeEqual } from 'node:crypto';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 const app=express(); const prisma=new PrismaClient(); const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024}});
 app.use(helmet()); app.use(cors({origin:process.env.WEB_ORIGIN||'http://localhost:3000'})); app.use(express.json({limit:'1mb'}));
 app.use('/api/auth',rateLimit({windowMs:15*60*1000,limit:15,standardHeaders:true,legacyHeaders:false}));
+app.use('/api/admin/bootstrap',rateLimit({windowMs:60*60*1000,limit:5,standardHeaders:true,legacyHeaders:false}));
+app.post('/api/admin/bootstrap',async(req,res)=>{
+ const configured=Buffer.from(process.env.ADMIN_BOOTSTRAP_TOKEN||'');
+ const supplied=Buffer.from(String(req.body?.token||''));
+ if(configured.length<32||supplied.length!==configured.length||!timingSafeEqual(configured,supplied))return fail(res,403,'کلید راه‌اندازی معتبر نیست یا در سرور تنظیم نشده است');
+ const parsed=z.object({token:z.string().min(32).max(512),channel:z.enum(['phone','email']),target:z.string().min(5).max(150)}).safeParse(req.body);
+ if(!parsed.success)return fail(res,400,'اطلاعات واردشده معتبر نیست');
+ const {channel}=parsed.data;
+ const target=channel==='email'?parsed.data.target.trim().toLowerCase():parsed.data.target.replace(/[\\s-]/g,'');
+ if(channel==='email'&&!/^\\S+@\\S+\\.\\S+$/.test(target))return fail(res,400,'ایمیل معتبر نیست');
+ if(channel==='phone'&&!/^\\+?[0-9]{10,15}$/.test(target))return fail(res,400,'شماره موبایل معتبر نیست');
+ try{
+  const admin=await prisma.$transaction(async tx=>{
+   if(await tx.user.count({where:{role:'ADMIN'}})>0)throw new Error('ADMIN_EXISTS');
+   const user=await tx.user.findUnique({where:channel==='email'?{email:target}:{phone:target}});
+   if(!user)throw new Error('ACCOUNT_NOT_FOUND');
+   if(user.role!=='CUSTOMER')throw new Error('ACCOUNT_NOT_ELIGIBLE');
+   return tx.user.update({where:{id:user.id},data:{role:'ADMIN'},select:{id:true,name:true,email:true,phone:true,role:true}});
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
+  res.setHeader('Cache-Control','no-store');
+  return res.json({ok:true,user:admin,message:'مدیر اصلی با موفقیت فعال شد. اکنون از حساب خارج شوید و دوباره وارد شوید.'});
+ }catch(e){
+  const code=e instanceof Error?e.message:'';
+  if(code==='ADMIN_EXISTS')return fail(res,409,'مدیر قبلاً ایجاد شده است؛ راه‌اندازی اولیه بسته شده است');
+  if(code==='ACCOUNT_NOT_FOUND')return fail(res,404,'ابتدا با همین ایمیل یا شماره موبایل در فروشگاه ثبت‌نام و آن را تأیید کنید');
+  if(code==='ACCOUNT_NOT_ELIGIBLE')return fail(res,409,'این حساب شرایط تبدیل به مدیر اولیه را ندارد');
+  return fail(res,409,'عملیات هم‌زمان یا خطای پایگاه داده رخ داد؛ وضعیت مدیر را دوباره بررسی کنید');
+ }
+});
 const secret=process.env.JWT_SECRET||'development-only-change-me';
 if(process.env.NODE_ENV==='production'&&(!process.env.JWT_SECRET||process.env.JWT_SECRET.length<32))throw new Error('JWT_SECRET must be configured with at least 32 characters in production');
 const fail=(res:express.Response,status:number,message:string)=>res.status(status).json({ok:false,message});
