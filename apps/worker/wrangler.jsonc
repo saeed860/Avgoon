@@ -4,5 +4,13 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-22",
   "workers_dev": true,
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "avgoon-store-db",
+      "database_id": "91ec17ab-9299-46df-b977-70098963623d",
+      "migrations_dir": "migrations"
+    }
+  ]
 }
