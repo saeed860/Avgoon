@@ -53,7 +53,7 @@ app.get('/api/products',async(req,res)=>{const page=Math.max(1,Number(req.query.
 app.get('/api/products/:slug',async(req,res)=>{const p=await prisma.product.findUnique({where:{slug:String(req.params.slug)},include:{category:true}});if(!p||!p.isPublished)return fail(res,404,'محصول پیدا نشد');res.json(p)});
 const otpSchema=z.object({target:z.string().min(5).max(150),channel:z.enum(['phone','email'])});
 app.post('/api/auth/request-otp',async(req,res)=>{const parsed=otpSchema.safeParse(req.body);if(!parsed.success)return fail(res,400,'اطلاعات ورود معتبر نیست');const {target,channel}=parsed.data;if(channel==='email'&&!/^\S+@\S+\.\S+$/.test(target))return fail(res,400,'ایمیل معتبر نیست');if(channel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target.replace(/[\s-]/g,'')))return fail(res,400,'شماره موبایل معتبر نیست');const code=String(randomInt(100000,1000000));const codeHash=await bcrypt.hash(code,10);const otpRecord=await prisma.otpCode.create({data:{target,channel,codeHash,expiresAt:new Date(Date.now()+5*60*1000)}});
-// Resend's HTTPS API works on free web hosts that block outbound SMTP ports.
+// Brevo's HTTPS API works on free web hosts that block outbound SMTP ports.
 const brevoConfigured=Boolean(process.env.BREVO_API_KEY&&process.env.BREVO_SENDER_EMAIL);
 if(channel==='email'&&brevoConfigured){
  try{
