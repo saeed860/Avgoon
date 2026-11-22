@@ -60,9 +60,9 @@ The Worker implementation is a separate deployment target. It must:
 
 Cloudflare Workers Free currently allows 100,000 requests/day and 10 ms CPU time per invocation. Design expensive operations (especially spreadsheet parsing) outside the request CPU budget or retain them as a controlled administrative import process.
 
-## 4. Email OTP — Resend Free
+## 4. Email OTP — Brevo Free
 
-Resend's free tier currently allows 300 transactional emails/day. Verify the sender email in Brevo before enabling customer OTP delivery. Brevo may rewrite free-mail sender addresses; a custom domain improves deliverability but is not a prerequisite for the first test. Configure only these secrets in the Worker:
+Brevo's free tier currently allows 300 transactional emails/day. Verify the sender email in Brevo before enabling customer OTP delivery. Brevo may rewrite free-mail sender addresses; a custom domain improves deliverability but is not a prerequisite for the first test. Configure only these secrets in the Worker:
 - `BREVO_API_KEY`
 - `BREVO_SENDER_EMAIL`
 
@@ -74,7 +74,7 @@ Set these as Worker secrets, never in source control:
 - `DATABASE_URL`: Neon pooled PostgreSQL URL.
 - `JWT_SECRET`: independent random secret of at least 32 characters.
 - `ADMIN_BOOTSTRAP_TOKEN`: one-time random token of at least 32 characters.
-- `BREVO_API_KEY`: Resend API key.
+- `BREVO_API_KEY`: Brevo API key.
 - `BREVO_SENDER_EMAIL`: verified sender identity.
 - `WEB_ORIGIN`: exact Cloudflare Pages origin.
 
