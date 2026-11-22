@@ -16,8 +16,8 @@ type Env = {
   JWT_SECRET: string;
   ADMIN_BOOTSTRAP_TOKEN: string;
   WEB_ORIGIN: string;
-  BREVO_API_KEY: string;
-  BREVO_SENDER_EMAIL: string;
+  RESEND_API_KEY: string;
+  RESEND_FROM_EMAIL?: string;
 };
 type Vars = { user: { id: string; role: string } };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -86,13 +86,13 @@ app.post('/api/auth/request-otp', async c => {
   if(channel==='email'&&!/^\S+@\S+\.\S+$/.test(target)) return fail(c,400,'ایمیل معتبر نیست');
   if(channel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target)) return fail(c,400,'شماره موبایل معتبر نیست');
   if(channel==='phone') return fail(c,503,'ورود با پیامک هنوز به ارائه‌دهنده پیامک متصل نشده است');
-  if(!c.env.BREVO_API_KEY||!c.env.BREVO_SENDER_EMAIL) return fail(c,503,'سرویس ایمیل هنوز پیکربندی نشده است');
+  if(!c.env.RESEND_API_KEY) return fail(c,503,'سرویس ایمیل هنوز پیکربندی نشده است');
   const recent=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='email' AND createdAt>=?",target,new Date(Date.now()-900000).toISOString()).first<{n:number}>();
   if((recent?.n||0)>=5) return fail(c,429,'تعداد درخواست‌ها بیش از حد مجاز است؛ بعداً دوباره تلاش کنید');
   const code=randomOtp(), id=crypto.randomUUID();
   await stmt(c,'INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,createdAt) VALUES(?,?,?,?,?,?)',id,target,'email',await hashOtp(code),new Date(Date.now()+300000).toISOString(),now()).run();
   try {
-    const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':c.env.BREVO_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({sender:{name:'آوگون',email:c.env.BREVO_SENDER_EMAIL},to:[{email:target}],subject:'کد ورود آوگون',textContent:`کد تأیید ورود شما: ${code}\nاین کد تا ۵ دقیقه معتبر است.`})});
+    const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${c.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:c.env.RESEND_FROM_EMAIL||'آوگون <onboarding@resend.dev>',to:[target],subject:'کد ورود آوگون',text:`کد تأیید ورود شما: ${code}\\nاین کد تا ۵ دقیقه معتبر است.`})});
     if(!response.ok) throw new Error('EMAIL_PROVIDER_ERROR');
     return c.json({ok:true,message:'کد تأیید به ایمیل شما ارسال شد.'});
   } catch { await stmt(c,'UPDATE OtpCode SET consumedAt=? WHERE id=?',now(),id).run(); return fail(c,502,'ارسال ایمیل ناموفق بود؛ کمی بعد دوباره تلاش کنید'); }
