@@ -64,7 +64,8 @@ jobs:
           grep -q "cEmail" /tmp/store.html
           grep -q "submitConsult" /tmp/store.html
           grep -q "/api/inquiries" /tmp/store.html
-          grep -q "در حال حاضر محصول واقعی" /tmp/store.html
+          grep -q "localStorage.removeItem(\x27avgoon_products\x27)" /tmp/store.html
+          if grep -q "پنل گچی ساده ۱۲.۵ میلی‌متر" /tmp/store.html; then echo "Demo products must not appear in storefront"; exit 1; fi
           if grep -q "۰۲۱-۹۱۰۰۴۰۸۰\|info@avgoon.ir" /tmp/store.html; then echo "Unverified placeholder contact data found"; exit 1; fi
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
