@@ -27,6 +27,75 @@ const configured=channel==='phone'?Boolean(process.env.SMS_PROVIDER_URL&&process
 if(!configured){if(process.env.NODE_ENV==='production')return fail(res,503,'سرویس ارسال کد هنوز پیکربندی نشده است');return res.json({ok:true,development:true,message:'سرویس ارسال در محیط توسعه تنظیم نشده است؛ کد فقط در لاگ امن سرور قابل مشاهده است.'})}
 console.info(`[AVGOON OTP DEV/PROVIDER ADAPTER REQUIRED] ${channel}:${target} code=${code}`);res.json({ok:true,message:'در صورت اتصال سرویس‌دهنده، کد ارسال می‌شود.'})});
 app.post('/api/auth/verify-otp',async(req,res)=>{const parsed=z.object({target:z.string().min(5).max(150),channel:z.enum(['phone','email']),code:z.string().length(6),name:z.string().trim().min(2).max(120).optional()}).safeParse(req.body);if(!parsed.success)return fail(res,400,'کد یا اطلاعات ورود نامعتبر است');const {target,channel,code,name}=parsed.data;const record=await prisma.otpCode.findFirst({where:{target,channel,consumedAt:null,expiresAt:{gt:new Date()},attempts:{lt:5}},orderBy:{createdAt:'desc'}});if(!record)return fail(res,400,'کد منقضی شده یا وجود ندارد');if(!await bcrypt.compare(code,record.codeHash)){await prisma.otpCode.update({where:{id:record.id},data:{attempts:{increment:1}}});return fail(res,400,'کد تأیید اشتباه است')};await prisma.otpCode.update({where:{id:record.id},data:{consumedAt:new Date()}});const where=channel==='phone'?{phone:target}:{email:target};const create=channel==='phone'?{phone:target,name:name||null}:{email:target,name:name||null};const user=await prisma.user.upsert({where,create,update:name?{name}:{}});const token=jwt.sign({sub:user.id,role:user.role},secret,{expiresIn:'7d'});res.json({token,user:{id:user.id,name:user.name,phone:user.phone,email:user.email,role:user.role}})});
+
+const profileSchema=z.object({name:z.string().trim().min(2).max(120)});
+const addressSchema=z.object({
+  recipientName:z.string().trim().min(2).max(120),
+  phone:z.string().trim().regex(/^\\+?[0-9]{10,15}$/,'شماره تماس معتبر نیست'),
+  province:z.string().trim().min(2).max(80),
+  city:z.string().trim().min(2).max(80),
+  postalCode:z.string().trim().regex(/^[0-9]{10}$/,'کدپستی باید ۱۰ رقم باشد'),
+  address:z.string().trim().min(8).max(500),
+  isDefault:z.boolean().optional()
+});
+app.get('/api/me',auth(),async(req,res)=>{
+  const user=await prisma.user.findUnique({where:{id:(req as any).user.sub},select:{id:true,name:true,phone:true,email:true,role:true,createdAt:true,addresses:{orderBy:[{isDefault:'desc'},{createdAt:'desc'}]}}});
+  if(!user)return fail(res,404,'حساب کاربری پیدا نشد');
+  res.json({ok:true,user});
+});
+app.patch('/api/me',auth(),async(req,res)=>{
+  const parsed=profileSchema.safeParse(req.body);
+  if(!parsed.success)return res.status(400).json({ok:false,message:'نام معتبر نیست',errors:parsed.error.flatten()});
+  const user=await prisma.user.update({where:{id:(req as any).user.sub},data:{name:parsed.data.name},select:{id:true,name:true,phone:true,email:true,role:true}});
+  res.json({ok:true,user});
+});
+app.post('/api/me/addresses',auth(),async(req,res)=>{
+  const parsed=addressSchema.safeParse(req.body);
+  if(!parsed.success)return res.status(400).json({ok:false,message:'اطلاعات نشانی معتبر نیست',errors:parsed.error.flatten()});
+  const userId=(req as any).user.sub;
+  const count=await prisma.address.count({where:{userId}});
+  const makeDefault=parsed.data.isDefault===true||count===0;
+  const address=await prisma.$transaction(async(tx)=>{
+    if(makeDefault)await tx.address.updateMany({where:{userId,isDefault:true},data:{isDefault:false}});
+    return tx.address.create({data:{...parsed.data,isDefault:makeDefault,userId}});
+  });
+  res.status(201).json({ok:true,address});
+});
+app.patch('/api/me/addresses/:id',auth(),async(req,res)=>{
+  const parsed=addressSchema.safeParse(req.body);
+  if(!parsed.success)return res.status(400).json({ok:false,message:'اطلاعات نشانی معتبر نیست',errors:parsed.error.flatten()});
+  const userId=(req as any).user.sub;
+  const current=await prisma.address.findFirst({where:{id:req.params.id,userId}});
+  if(!current)return fail(res,404,'نشانی پیدا نشد');
+  const makeDefault=parsed.data.isDefault===true;
+  const address=await prisma.$transaction(async(tx)=>{
+    if(makeDefault)await tx.address.updateMany({where:{userId,isDefault:true},data:{isDefault:false}});
+    return tx.address.update({where:{id:current.id},data:{...parsed.data,isDefault:makeDefault||current.isDefault}});
+  });
+  res.json({ok:true,address});
+});
+app.post('/api/me/addresses/:id/default',auth(),async(req,res)=>{
+  const userId=(req as any).user.sub;
+  const current=await prisma.address.findFirst({where:{id:req.params.id,userId}});
+  if(!current)return fail(res,404,'نشانی پیدا نشد');
+  await prisma.$transaction([
+    prisma.address.updateMany({where:{userId,isDefault:true},data:{isDefault:false}}),
+    prisma.address.update({where:{id:current.id},data:{isDefault:true}})
+  ]);
+  res.json({ok:true});
+});
+app.delete('/api/me/addresses/:id',auth(),async(req,res)=>{
+  const userId=(req as any).user.sub;
+  const current=await prisma.address.findFirst({where:{id:req.params.id,userId}});
+  if(!current)return fail(res,404,'نشانی پیدا نشد');
+  await prisma.address.delete({where:{id:current.id}});
+  if(current.isDefault){
+    const next=await prisma.address.findFirst({where:{userId},orderBy:{createdAt:'desc'}});
+    if(next)await prisma.address.update({where:{id:next.id},data:{isDefault:true}});
+  }
+  res.json({ok:true});
+});
+
 const productSchema=z.object({sku:z.string().min(1),name:z.string().min(2),slug:z.string().min(2),description:z.string().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string()]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().default('عدد'),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean().default(false)});
 app.post('/api/admin/products',auth('ADMIN'),async(req,res)=>{const parsed=productSchema.safeParse(req.body);if(!parsed.success)return res.status(400).json({ok:false,errors:parsed.error.flatten()});const {categorySlug,priceToman,...data}=parsed.data;const p=await prisma.product.create({data:{...data,priceToman:priceToman===undefined?null:BigInt(priceToman),category:categorySlug?{connect:{slug:categorySlug}}:undefined}});res.status(201).json(p)});
 app.patch('/api/admin/products/:id',auth('ADMIN'),async(req,res)=>{const data:any={...req.body};if(data.priceToman!==undefined)data.priceToman=BigInt(data.priceToman);if(data.categorySlug){data.category={connect:{slug:data.categorySlug}};delete data.categorySlug}const p=await prisma.product.update({where:{id:req.params.id},data});res.json(p)});
