@@ -27,6 +27,10 @@ const b64 = (v: Uint8Array) => btoa(Array.from(v, x => String.fromCharCode(x)).j
 const unb64 = (v: string) => Uint8Array.from(atob(v), x => x.charCodeAt(0));
 const now = () => new Date().toISOString();
 const stmt = (c: { env: Env }, query: string, ...args: any[]): D1Statement => c.env.DB.prepare(query).bind(...args);
+async function hashKey(value:string) {
+  const digest=await crypto.subtle.digest('SHA-256',enc.encode(value));
+  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+}
 
 function randomOtp() {
   const max = 0x100000000, ceiling = Math.floor(max / 900000) * 900000;
@@ -61,6 +65,30 @@ app.use('/api/*', cors({
   allowHeaders: ['Content-Type','Authorization','Idempotency-Key'], maxAge: 86400
 }));
 app.get('/api/health', c => c.json({ok:true,service:'AVGOON API',runtime:'cloudflare-workers-d1',time:now()}));
+
+app.post('/api/inquiries',async c=>{
+  const p=z.object({
+    name:z.string().trim().min(2).max(120),
+    phone:z.string().trim().min(8).max(24),
+    email:z.union([z.string().trim().email().max(150),z.literal('')]).optional(),
+    projectType:z.string().trim().max(120).optional(),
+    message:z.string().trim().min(5).max(2000),
+    website:z.string().max(200).optional()
+  }).safeParse(await c.req.json().catch(()=>null));
+  if(!p.success)return fail(c,400,'اطلاعات درخواست مشاوره معتبر نیست');
+  if(p.data.website)return c.json({ok:true,message:'درخواست شما ثبت شد.'},201);
+  const ip=c.req.header('CF-Connecting-IP')||'unknown';
+  const ipHash=await hashKey(ip+':'+c.env.JWT_SECRET);
+  const since=new Date(Date.now()-3600000).toISOString();
+  const recent=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='inquiry' AND createdAt>?",ipHash,since).first<any>();
+  if((recent?.n||0)>=5)return fail(c,429,'تعداد درخواست‌ها بیش از حد مجاز است؛ یک ساعت دیگر تلاش کنید');
+  const timestamp=now();
+  await stmt(c,"INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt) VALUES(?,?,'inquiry','rate-limit',?,?,?)",crypto.randomUUID(),ipHash,new Date(Date.now()+86400000).toISOString(),timestamp,timestamp).run();
+  const id=crypto.randomUUID();
+  await stmt(c,'INSERT INTO ProjectInquiry(id,name,phone,email,projectType,message,status,createdAt,updatedAt) VALUES(?,?,?,?,?,? ,\'NEW\',?,?)',
+    id,p.data.name,p.data.phone,p.data.email||null,p.data.projectType||null,p.data.message,timestamp,timestamp).run();
+  return c.json({ok:true,id,message:'درخواست مشاوره شما با موفقیت ثبت شد.'},201);
+});
 
 app.get('/api/categories', async c => {
   const {results=[]}=await stmt(c,'SELECT id,name,slug,description FROM Category ORDER BY name').all();
@@ -222,6 +250,21 @@ app.post('/api/orders',requireUser,async c=>{
 });
 
 app.use('/api/admin/*',requireAdmin);
+app.get('/api/admin/inquiries',async c=>{
+  const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||50));
+  const status=c.req.query('status')||'',where="(?='' OR status=?)";
+  const [{results=[]},{results:counts=[]}]=await Promise.all([
+    stmt(c,`SELECT id,name,phone,email,projectType,message,status,createdAt,updatedAt FROM ProjectInquiry WHERE ${where} ORDER BY createdAt DESC LIMIT ? OFFSET ?`,status,status,limit,(page-1)*limit).all(),
+    stmt(c,`SELECT COUNT(*) AS total FROM ProjectInquiry WHERE ${where}`,status,status).all()
+  ]);
+  return c.json({items:results,total:counts[0]?.total||0,page,limit});
+});
+app.patch('/api/admin/inquiries/:id/status',async c=>{
+  const p=z.object({status:z.enum(['NEW','CONTACTED','CLOSED'])}).safeParse(await c.req.json().catch(()=>null));
+  if(!p.success)return fail(c,400,'وضعیت درخواست معتبر نیست');
+  const row=await stmt(c,'UPDATE ProjectInquiry SET status=?,updatedAt=? WHERE id=? RETURNING id,status,updatedAt',p.data.status,now(),c.req.param('id')).first();
+  return row?c.json(row):fail(c,404,'درخواست مشاوره پیدا نشد');
+});
 app.get('/api/admin/summary',async c=>{
   const row=await stmt(c,`SELECT (SELECT COUNT(*) FROM User) AS users,(SELECT COUNT(*) FROM "Order") AS orders,(SELECT COUNT(*) FROM "Order" WHERE status='PENDING') AS pendingOrders,(SELECT COALESCE(SUM(totalToman),0) FROM "Order" WHERE status IN ('PAID','PROCESSING','SHIPPED','COMPLETED')) AS paidTotalToman`).first<any>();
   return c.json(row);
