@@ -160,8 +160,15 @@ app.post('/api/orders',requireUser,async c=>{
   if(!/^[A-Za-z0-9._:-]{12,128}$/.test(key))return fail(c,400,'شناسه یکتای سفارش معتبر نیست');
   const user=c.get('user') as {id:string};
   const idempotencyKey=user.id+':'+key;
-  const existing=await stmt(c,'SELECT id,status,totalToman,createdAt FROM "Order" WHERE idempotencyKey=?',idempotencyKey).first<any>();
-  if(existing)return c.json({ok:true,replayed:true,order:existing});
+  const canonical={items:[...parsed.data.items].sort((a,b)=>a.productId.localeCompare(b.productId)),address:parsed.data.address,note:parsed.data.note||''};
+  const digest=await crypto.subtle.digest('SHA-256',enc.encode(JSON.stringify(canonical)));
+  const requestHash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  const existing=await stmt(c,'SELECT id,status,totalToman,createdAt,requestHash FROM "Order" WHERE idempotencyKey=?',idempotencyKey).first<any>();
+  if(existing){
+    if(existing.requestHash!==requestHash)return fail(c,409,'این شناسه سفارش قبلاً برای اطلاعات دیگری استفاده شده است');
+    const {requestHash:_hash,...order}=existing;
+    return c.json({ok:true,replayed:true,order});
+  }
   const ids=[...new Set(parsed.data.items.map(x=>x.productId))];
   if(ids.length!==parsed.data.items.length)return fail(c,400,'هر کالا فقط باید یک‌بار در فهرست سفارش باشد');
   const placeholders=ids.map(()=>'?').join(',');
@@ -177,15 +184,19 @@ app.post('/api/orders',requireUser,async c=>{
     return {id:crypto.randomUUID(),productId:p.id,quantity:item.quantity,unitPriceToman:String(price)};
   });
   const statements=[
-    stmt(c,'INSERT INTO "Order"(id,userId,status,totalToman,address,note,createdAt,idempotencyKey) VALUES(?,?,\'PENDING\',?,?,?,?,?)',orderId,user.id,String(total),JSON.stringify(parsed.data.address),parsed.data.note||null,created,idempotencyKey),
+    stmt(c,'INSERT INTO "Order"(id,userId,status,totalToman,address,note,createdAt,idempotencyKey,requestHash) VALUES(?,?,\'PENDING\',?,?,?,?,?,?)',orderId,user.id,String(total),JSON.stringify(parsed.data.address),parsed.data.note||null,created,idempotencyKey,requestHash),
     ...orderItems.map(item=>stmt(c,'INSERT INTO OrderItem(id,orderId,productId,quantity,unitPriceToman) VALUES(?,?,?,?,?)',item.id,orderId,item.productId,item.quantity,item.unitPriceToman))
   ];
   try {
     await c.env.DB.batch(statements);
     return c.json({ok:true,replayed:false,order:{id:orderId,status:'PENDING',totalToman:String(total),createdAt:created}},201);
   } catch(e) {
-    const replay=await stmt(c,'SELECT id,status,totalToman,createdAt FROM "Order" WHERE idempotencyKey=?',idempotencyKey).first<any>();
-    if(replay)return c.json({ok:true,replayed:true,order:replay});
+    const replay=await stmt(c,'SELECT id,status,totalToman,createdAt,requestHash FROM "Order" WHERE idempotencyKey=?',idempotencyKey).first<any>();
+    if(replay){
+      if(replay.requestHash!==requestHash)return fail(c,409,'این شناسه سفارش قبلاً برای اطلاعات دیگری استفاده شده است');
+      const {requestHash:_hash,...order}=replay;
+      return c.json({ok:true,replayed:true,order});
+    }
     const message=String(e);
     if(message.includes('INSUFFICIENT_STOCK'))return fail(c,409,'موجودی یکی از کالاها کافی نیست');
     return fail(c,409,'ثبت سفارش انجام نشد؛ موجودی یا قیمت کالاها را دوباره بررسی کنید');
@@ -283,7 +294,7 @@ app.post('/api/admin/products/import-csv',async c=>{
   try{rows=parseCsv(await file.text());}catch{return fail(c,400,'ساختار فایل CSV معتبر نیست');}
   if(rows.length<2)return fail(c,400,'فایل ردیف محصول ندارد');
   if(rows.length>1001)return fail(c,413,'حداکثر ۱۰۰۰ ردیف محصول مجاز است');
-  const headers=rows[0].map(x=>x.trim());
+  const headers=rows[0].map((x,i)=>x.trim().replace(i===0?/^\\uFEFF/:'',''));
   const aliases:Record<string,string[]>={sku:['sku','SKU','کد کالا'],name:['name','نام محصول','نام'],slug:['slug','نامک'],description:['description','توضیحات'],priceToman:['priceToman','قیمت تومان','قیمت'],stock:['stock','موجودی'],unit:['unit','واحد'],brand:['brand','برند'],categorySlug:['categorySlug','نامک دسته‌بندی'],imageUrl:['imageUrl','تصویر','آدرس تصویر'],isPublished:['isPublished','انتشار']};
   let created=0,updated=0;const errors:any[]=[];
   for(let i=1;i<rows.length;i++){
