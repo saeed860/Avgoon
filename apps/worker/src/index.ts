@@ -9,8 +9,8 @@ type Env = {
   JWT_SECRET: string;
   ADMIN_BOOTSTRAP_TOKEN: string;
   WEB_ORIGIN: string;
-  RESEND_API_KEY: string;
-  RESEND_FROM: string;
+  BREVO_API_KEY: string;
+  BREVO_SENDER_EMAIL: string;
 };
 
 type Vars = { user: { id: string; role: string } };
