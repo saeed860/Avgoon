@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'apps/api/**'
+      - 'apps/worker/**'
       - '.github/workflows/api-ci.yml'
   push:
     branches: [main]
@@ -43,5 +44,8 @@ jobs:
       - run: npx prisma generate
       - run: npx prisma migrate deploy
       - run: npm run build
+      - name: Typecheck Cloudflare Worker API
+        working-directory: apps/worker
+        run: npm install && npm run typecheck
 
 # CI includes PostgreSQL migration deployment and strict TypeScript compilation.
