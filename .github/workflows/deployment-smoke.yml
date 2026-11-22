@@ -52,4 +52,9 @@ jobs:
           curl -fsS "$WEB/" -o /tmp/store.html
           grep -q "AVGOON_API_URL" <(curl -fsS "$WEB/config.js")
           grep -q "checkoutModal" /tmp/store.html
-          echo "Pages preview PASS"
+          curl -fsS "$WEB/admin.html" -o /tmp/admin.html
+          grep -q "editProduct" /tmp/admin.html
+          grep -q "xlsx.full.min.js" /tmp/admin.html
+          curl -fsS "$WEB/first-admin.html" -o /tmp/first-admin.html
+          grep -q "/api/admin/bootstrap" /tmp/first-admin.html
+          echo "Pages storefront, product editor, Excel import and first-admin setup PASS"
