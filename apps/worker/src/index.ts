@@ -273,7 +273,7 @@ app.patch('/api/admin/orders/:id/status',async c=>{
   return row?c.json(row):fail(c,409,'وضعیت سفارش هم‌زمان تغییر کرده است؛ دوباره فهرست را تازه‌سازی کنید');
 });
 app.post('/api/admin/products',async c=>{
-  const p=z.object({sku:z.string().min(1),name:z.string().min(2),slug:z.string().min(2),description:z.string().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string()]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().default('عدد'),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean().default(false)}).safeParse(await c.req.json().catch(()=>null));
+  const p=z.object({sku:z.string().trim().min(1).max(80),name:z.string().trim().min(2).max(200),slug:z.string().trim().min(2).max(220),description:z.string().max(5000).optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\\d+$/)]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().trim().min(1).max(30).default('عدد'),brand:z.string().trim().max(100).optional(),categorySlug:z.string().max(120).optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean().default(false)}).safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return c.json({ok:false,errors:p.error.flatten()},400);
   const x=p.data,id=crypto.randomUUID(),time=now();
   const category=x.categorySlug?await stmt(c,'SELECT id FROM Category WHERE slug=?',x.categorySlug).first<any>():null;
