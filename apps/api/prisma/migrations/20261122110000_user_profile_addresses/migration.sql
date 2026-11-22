@@ -15,3 +15,6 @@ CREATE TABLE "Address" (
 CREATE INDEX "Address_userId_idx" ON "Address"("userId");
 ALTER TABLE "Address" ADD CONSTRAINT "Address_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Enforce at most one default address per user, including concurrent requests.
+CREATE UNIQUE INDEX "Address_one_default_per_user_idx" ON "Address" ("userId") WHERE "isDefault" = true;
