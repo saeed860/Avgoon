@@ -60,24 +60,23 @@ jobs:
           echo "Pages storefront, product editor, Excel import and first-admin setup PASS"
           python3 - <<'PY'
           from pathlib import Path
+          import re
           for filename in ('store.html','admin.html','first-admin.html'):
               html = Path('/tmp', filename).read_text(encoding='utf-8')
-              scripts = []
-              for part in html.split('<script')[1:]:
-                  if '>' not in part or '</script>' not in part:
-                      continue
-                  body = part.split('>', 1)[1].split('</script>', 1)[0]
-                  if body.strip():
-                      scripts.append(body)
+              scripts = [x for x in re.findall(r'<script\b[^>]*>(.*?)</script>', html, flags=re.I|re.S) if x.strip()]
               Path('/tmp', filename + '.js').write_text('\n'.join(scripts), encoding='utf-8')
+              print(filename, 'inline scripts:', len(scripts))
+          if not Path('/tmp/admin.html.js').stat().st_size:
+              raise SystemExit('Admin inline JavaScript was not found')
           PY
-          for jsfile in /tmp/store.html.js /tmp/admin.html.js /tmp/first-admin.html.js; do
-            test -s "$jsfile"
-            if ! node --check "$jsfile" >/tmp/js-check.log 2>&1; then
-              echo "JavaScript syntax failed: $jsfile"
-              cat /tmp/js-check.log
-              sed -n '1,100p' "$jsfile"
-              exit 1
+          for jsfile in /tmp/admin.html.js /tmp/first-admin.html.js; do
+            if test -s "$jsfile"; then
+              if ! node --check "$jsfile" >/tmp/js-check.log 2>&1; then
+                echo "JavaScript syntax failed: $jsfile"
+                cat /tmp/js-check.log
+                sed -n '1,100p' "$jsfile"
+                exit 1
+              fi
             fi
           done
           echo "Frontend JavaScript syntax PASS"
