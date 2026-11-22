@@ -274,8 +274,11 @@ app.get('/api/admin/summary',async c=>{
   return c.json(row);
 });
 app.get('/api/admin/products',async c=>{
-  const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||50)),q=(c.req.query('q')||'').trim(),like='%'+q+'%',category=(c.req.query('category')||'').trim(),published=c.req.query('published')||'';
-  const where="(?='' OR p.name LIKE ? OR p.sku LIKE ?) AND (?='' OR c.slug=?) AND (?='' OR p.isPublished=?)";
+  const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||50)),q=(c.req.query('q')||'').trim(),like='%'+q+'%',category=(c.req.query('category')||'').trim(),published=c.req.query('published')||'',stockStatus=c.req.query('stockStatus')||'';
+  if(published!==''&&!['0','1'].includes(published))return fail(c,400,'فیلتر وضعیت انتشار نامعتبر است');
+  if(stockStatus!==''&&!['out','low','available'].includes(stockStatus))return fail(c,400,'فیلتر موجودی نامعتبر است');
+  const stockWhere=stockStatus==='out'?' AND p.stock=0':stockStatus==='low'?' AND p.stock BETWEEN 1 AND 5':stockStatus==='available'?' AND p.stock>5':'';
+  const where="(?='' OR p.name LIKE ? OR p.sku LIKE ?) AND (?='' OR c.slug=?) AND (?='' OR p.isPublished=?)"+stockWhere;
   const args=[q,like,like,category,category,published,published===''?0:Number(published)];
   const [{results=[]},{results:counts=[]}]=await Promise.all([
     stmt(c,`SELECT p.id,p.sku,p.name,p.slug,p.description,p.priceToman,p.stock,p.unit,p.brand,p.imageUrl,p.isPublished,p.createdAt,p.updatedAt,COALESCE(c.name,'') AS categoryName,COALESCE(c.slug,'') AS categorySlug FROM Product p LEFT JOIN Category c ON c.id=p.categoryId WHERE ${where} ORDER BY p.createdAt DESC LIMIT ? OFFSET ?`,...args,limit,(page-1)*limit).all(),
