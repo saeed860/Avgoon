@@ -101,4 +101,5 @@ app.patch('/api/admin/orders/:id/status',auth('ADMIN'),async(req,res)=>{
  }catch{return fail(res,404,'سفارش پیدا نشد')}
 });
 
-app.listen(Number(process.env.API_PORT)||4000,()=>console.info(`AVGOON API listening on ${process.env.API_PORT||4000}`));
+const port=Number(process.env.PORT||process.env.API_PORT)||4000;
+app.listen(port,'0.0.0.0',()=>console.info(`AVGOON API listening on ${port}`));
