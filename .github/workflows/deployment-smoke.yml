@@ -22,7 +22,7 @@ jobs:
       - name: Verify deployed Worker API and CORS
         env:
           API: https://avgoon-api.i-am-saeed4700.workers.dev
-          WEB: https://d94744bf.avgoon-store.pages.dev
+          WEB: https://feature-admin-users-orders.avgoon-store.pages.dev
         run: |
           set -euo pipefail
           for attempt in $(seq 1 12); do
@@ -46,7 +46,7 @@ jobs:
           echo "OTP correctly reports missing Resend secret (503)"
       - name: Verify latest Pages preview
         env:
-          WEB: https://d94744bf.avgoon-store.pages.dev
+          WEB: https://feature-admin-users-orders.avgoon-store.pages.dev
         run: |
           set -euo pipefail
           curl -fsSL "$WEB/" -o /tmp/store.html
