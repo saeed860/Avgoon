@@ -294,7 +294,7 @@ app.post('/api/admin/products/import-csv',async c=>{
   try{rows=parseCsv(await file.text());}catch{return fail(c,400,'ساختار فایل CSV معتبر نیست');}
   if(rows.length<2)return fail(c,400,'فایل ردیف محصول ندارد');
   if(rows.length>1001)return fail(c,413,'حداکثر ۱۰۰۰ ردیف محصول مجاز است');
-  const headers=rows[0].map((x,i)=>x.trim().replace(i===0?/^\\uFEFF/:'',''));
+  const headers=rows[0].map((x,i)=>x.trim().replace(i===0?/^\uFEFF/:'',''));
   const aliases:Record<string,string[]>={sku:['sku','SKU','کد کالا'],name:['name','نام محصول','نام'],slug:['slug','نامک'],description:['description','توضیحات'],priceToman:['priceToman','قیمت تومان','قیمت'],stock:['stock','موجودی'],unit:['unit','واحد'],brand:['brand','برند'],categorySlug:['categorySlug','نامک دسته‌بندی'],imageUrl:['imageUrl','تصویر','آدرس تصویر'],isPublished:['isPublished','انتشار']};
   let created=0,updated=0;const errors:any[]=[];
   for(let i=1;i<rows.length;i++){
