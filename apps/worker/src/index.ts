@@ -229,4 +229,80 @@ app.post('/api/admin/products',async c=>{
     return c.json({id,sku:x.sku,name:x.name,slug:x.slug,priceToman:x.priceToman??null,stock:x.stock,isPublished:x.isPublished},201);
   }catch{return fail(c,409,'کد کالا یا نشانی محصول تکراری است');}
 });
+
+function parseCsv(input:string):string[][] {
+  const rows:string[][]=[]; let row:string[]=[], field='', quoted=false;
+  for(let i=0;i<input.length;i++){
+    const ch=input[i];
+    if(quoted){if(ch==='"'&&input[i+1]==='"'){field+='"';i++;}else if(ch==='"')quoted=false;else field+=ch;}
+    else if(ch==='"')quoted=true;
+    else if(ch===','){row.push(field);field='';}
+    else if(ch==='\\n'){row.push(field.replace(/\\r$/,''));rows.push(row);row=[];field='';}
+    else field+=ch;
+  }
+  if(quoted)throw new Error('CSV_INVALID_QUOTES');
+  if(field.length||row.length){row.push(field.replace(/\\r$/,''));rows.push(row);}
+  return rows;
+}
+const productUpdateSchema=z.object({
+  sku:z.string().min(1).max(80).optional(),name:z.string().min(2).max(200).optional(),slug:z.string().min(2).max(220).optional(),
+  description:z.string().max(5000).nullable().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\\d+$/),z.null()]).optional(),
+  stock:z.number().int().nonnegative().optional(),unit:z.string().min(1).max(30).optional(),brand:z.string().max(100).nullable().optional(),
+  categorySlug:z.string().max(120).nullable().optional(),imageUrl:z.string().url().nullable().optional(),isPublished:z.boolean().optional(),
+  technicalSpecs:z.record(z.string(),z.unknown()).nullable().optional()
+}).strict().refine(v=>Object.keys(v).length>0);
+app.patch('/api/admin/products/:id',async c=>{
+  const p=productUpdateSchema.safeParse(await c.req.json().catch(()=>null));
+  if(!p.success)return c.json({ok:false,errors:p.error.flatten()},400);
+  const data:any={...p.data}; delete data.categorySlug;
+  const fields:string[]=[]; const values:any[]=[];
+  for(const [key,value] of Object.entries(data)){
+    const column=({priceToman:'priceToman',technicalSpecs:'technicalSpecs',isPublished:'isPublished'} as Record<string,string>)[key]||key;
+    fields.push(column+'=?');
+    values.push(key==='priceToman'?(value===null?null:String(value)):key==='technicalSpecs'?(value===null?null:JSON.stringify(value)):key==='isPublished'?(value?1:0):value);
+  }
+  if(p.data.categorySlug!==undefined){
+    const cat=p.data.categorySlug?await stmt(c,'SELECT id FROM Category WHERE slug=?',p.data.categorySlug).first<any>():null;
+    if(p.data.categorySlug&&!cat)return fail(c,400,'دسته‌بندی پیدا نشد');
+    fields.push('categoryId=?');values.push(cat?.id||null);
+  }
+  fields.push('updatedAt=?');values.push(now());values.push(c.req.param('id'));
+  try{
+    const row=await stmt(c,'UPDATE Product SET '+fields.join(',')+' WHERE id=? RETURNING id,sku,name,slug,priceToman,stock,unit,isPublished,categoryId,updatedAt',...values).first();
+    return row?c.json(row):fail(c,404,'محصول پیدا نشد');
+  }catch{return fail(c,409,'کد کالا یا نامک تکراری است');}
+});
+app.post('/api/admin/products/import-csv',async c=>{
+  const form=await c.req.formData().catch(()=>null),file=form?.get('file');
+  if(!(file instanceof File))return fail(c,400,'فایل CSV ارسال نشده است');
+  if(file.size>5*1024*1024)return fail(c,413,'حجم فایل نباید بیشتر از ۵ مگابایت باشد');
+  if(!file.name.toLowerCase().endsWith('.csv'))return fail(c,415,'در این نسخه فقط فایل CSV پشتیبانی می‌شود');
+  let rows:string[][];
+  try{rows=parseCsv(await file.text());}catch{return fail(c,400,'ساختار فایل CSV معتبر نیست');}
+  if(rows.length<2)return fail(c,400,'فایل ردیف محصول ندارد');
+  if(rows.length>1001)return fail(c,413,'حداکثر ۱۰۰۰ ردیف محصول مجاز است');
+  const headers=rows[0].map(x=>x.trim());
+  const aliases:Record<string,string[]>={sku:['sku','SKU','کد کالا'],name:['name','نام محصول','نام'],slug:['slug','نامک'],description:['description','توضیحات'],priceToman:['priceToman','قیمت تومان','قیمت'],stock:['stock','موجودی'],unit:['unit','واحد'],brand:['brand','برند'],categorySlug:['categorySlug','نامک دسته‌بندی'],imageUrl:['imageUrl','تصویر','آدرس تصویر'],isPublished:['isPublished','انتشار']};
+  let created=0,updated=0;const errors:any[]=[];
+  for(let i=1;i<rows.length;i++){
+    if(rows[i].every(v=>!v.trim()))continue;
+    const get=(key:string)=>{const idx=headers.findIndex(h=>aliases[key].includes(h));return idx<0?'':(rows[i][idx]||'').trim();};
+    const raw={sku:get('sku'),name:get('name'),slug:get('slug')||get('sku').toLowerCase().replace(/[^a-z0-9-]+/g,'-'),description:get('description')||undefined,priceToman:get('priceToman')||undefined,stock:Number(get('stock')||0),unit:get('unit')||'عدد',brand:get('brand')||undefined,categorySlug:get('categorySlug')||undefined,imageUrl:get('imageUrl')||undefined,isPublished:['1','true','yes','بله'].includes(get('isPublished').toLowerCase())};
+    const p=z.object({sku:z.string().min(1).max(80),name:z.string().min(2).max(200),slug:z.string().min(2).max(220),description:z.string().optional(),priceToman:z.string().regex(/^\\d+$/).optional(),stock:z.number().int().nonnegative(),unit:z.string().min(1).max(30),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean()}).safeParse(raw);
+    if(!p.success){errors.push({row:i+1,sku:raw.sku,message:'اطلاعات ردیف معتبر نیست'});continue;}
+    try{
+      const cat=p.data.categorySlug?await stmt(c,'SELECT id FROM Category WHERE slug=?',p.data.categorySlug).first<any>():null;
+      if(p.data.categorySlug&&!cat)throw new Error('CATEGORY_NOT_FOUND');
+      const existing=await stmt(c,'SELECT id FROM Product WHERE sku=?',p.data.sku).first<any>();
+      const id=existing?.id||crypto.randomUUID(),t=now();
+      await stmt(c,`INSERT INTO Product(id,sku,name,slug,description,priceToman,stock,unit,brand,imageUrl,isPublished,categoryId,createdAt,updatedAt)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(sku) DO UPDATE SET name=excluded.name,slug=excluded.slug,description=excluded.description,priceToman=excluded.priceToman,stock=excluded.stock,unit=excluded.unit,brand=excluded.brand,imageUrl=excluded.imageUrl,isPublished=excluded.isPublished,categoryId=excluded.categoryId,updatedAt=excluded.updatedAt`,
+        id,p.data.sku,p.data.name,p.data.slug,p.data.description||null,p.data.priceToman||null,p.data.stock,p.data.unit,p.data.brand||null,p.data.imageUrl||null,p.data.isPublished?1:0,cat?.id||null,t,t).run();
+      existing?updated++:created++;
+    }catch(e){errors.push({row:i+1,sku:raw.sku,message:String(e).includes('CATEGORY_NOT_FOUND')?'دسته‌بندی پیدا نشد':'ثبت ردیف ناموفق بود؛ احتمالاً نامک تکراری است'});}
+  }
+  return c.json({ok:errors.length===0,created,updated,failed:errors.length,errors});
+});
+
 export default app;
