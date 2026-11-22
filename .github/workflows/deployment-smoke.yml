@@ -59,6 +59,12 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL "$WEB/" -o /tmp/store.html
+          curl -fsSI "$WEB/" -D /tmp/page.headers -o /dev/null
+          grep -qi "x-content-type-options: nosniff" /tmp/page.headers
+          grep -qi "content-security-policy:" /tmp/page.headers
+          curl -fsSI "$WEB/config.js" -D /tmp/config.headers -o /dev/null
+          grep -qi "cache-control:.*no-cache" /tmp/config.headers
+          echo "Pages security headers and API config cache policy PASS"
           grep -q "AVGOON_API_URL" <(curl -fsSL "$WEB/config.js")
           grep -q "checkoutModal" /tmp/store.html
           grep -q "cEmail" /tmp/store.html
