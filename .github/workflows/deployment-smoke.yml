@@ -35,6 +35,8 @@ jobs:
           grep -qi "idempotency-key" /tmp/cors.headers
           echo "CORS PASS"
       - name: Verify latest Pages preview
+        env:
+          WEB: https://feature-admin-users-orders.avgoon-store.pages.dev
         run: |
           set -euo pipefail
           curl -fsS "$WEB/" -o /tmp/store.html
