@@ -8,7 +8,8 @@ import * as XLSX from 'xlsx';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, randomInt } from 'node:crypto';
+import nodemailer from 'nodemailer';
 import { Prisma, PrismaClient } from '@prisma/client';
 
 const app=express(); const prisma=new PrismaClient(); const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024}});
@@ -52,11 +53,22 @@ app.get('/api/categories',async(_req,res)=>res.json(await prisma.category.findMa
 app.get('/api/products',async(req,res)=>{const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(60,Math.max(1,Number(req.query.limit)||24));const q=String(req.query.q||'');const where:any={isPublished:true};if(q)where.OR=[{name:{contains:q,mode:'insensitive'}},{sku:{contains:q,mode:'insensitive'}}];if(req.query.category)where.category={slug:String(req.query.category)};const [items,total]=await Promise.all([prisma.product.findMany({where,include:{category:true},skip:(page-1)*limit,take:limit,orderBy:{createdAt:'desc'}}),prisma.product.count({where})]);res.json({items,total,page,limit})});
 app.get('/api/products/:slug',async(req,res)=>{const p=await prisma.product.findUnique({where:{slug:String(req.params.slug)},include:{category:true}});if(!p||!p.isPublished)return fail(res,404,'محصول پیدا نشد');res.json(p)});
 const otpSchema=z.object({target:z.string().min(5).max(150),channel:z.enum(['phone','email'])});
-app.post('/api/auth/request-otp',async(req,res)=>{const parsed=otpSchema.safeParse(req.body);if(!parsed.success)return fail(res,400,'اطلاعات ورود معتبر نیست');const {target,channel}=parsed.data;if(channel==='email'&&!/^\S+@\S+\.\S+$/.test(target))return fail(res,400,'ایمیل معتبر نیست');if(channel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target.replace(/[\s-]/g,'')))return fail(res,400,'شماره موبایل معتبر نیست');const code=String(Math.floor(100000+Math.random()*900000));const codeHash=await bcrypt.hash(code,10);await prisma.otpCode.create({data:{target,channel,codeHash,expiresAt:new Date(Date.now()+5*60*1000)}});
-// Delivery is intentionally fail-closed: configure an SMS/SMTP adapter before production. Never expose OTP in production responses.
-const configured=channel==='phone'?Boolean(process.env.SMS_PROVIDER_URL&&process.env.SMS_PROVIDER_TOKEN):Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASS);
-if(!configured){if(process.env.NODE_ENV==='production')return fail(res,503,'سرویس ارسال کد هنوز پیکربندی نشده است');return res.json({ok:true,development:true,message:'سرویس ارسال در محیط توسعه تنظیم نشده است؛ کد فقط در لاگ امن سرور قابل مشاهده است.'})}
-if(process.env.NODE_ENV==='production')return fail(res,503,'اتصال واقعی سرویس ارسال کد هنوز تکمیل نشده است؛ برای امنیت، کد ورود ارسال یا افشا نمی‌شود');console.info(`[AVGOON OTP DEVELOPMENT ONLY] ${channel}:${target} code=${code}`);res.json({ok:true,development:true,message:'کد فقط در لاگ محیط توسعه ثبت شده است؛ ارسال واقعی فعال نیست.'})});
+app.post('/api/auth/request-otp',async(req,res)=>{const parsed=otpSchema.safeParse(req.body);if(!parsed.success)return fail(res,400,'اطلاعات ورود معتبر نیست');const {target,channel}=parsed.data;if(channel==='email'&&!/^\S+@\S+\.\S+$/.test(target))return fail(res,400,'ایمیل معتبر نیست');if(channel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target.replace(/[\s-]/g,'')))return fail(res,400,'شماره موبایل معتبر نیست');const code=String(randomInt(100000,1000000));const codeHash=await bcrypt.hash(code,10);await prisma.otpCode.create({data:{target,channel,codeHash,expiresAt:new Date(Date.now()+5*60*1000)}});
+// Email OTP is delivered through SMTP. SMS remains disabled until a provider-specific adapter is configured.
+const mailConfigured=Boolean(process.env.SMTP_HOST&&process.env.SMTP_USER&&process.env.SMTP_PASS&&process.env.SMTP_FROM);
+if(channel==='email'&&mailConfigured){
+ try{
+  const transporter=nodemailer.createTransport({host:process.env.SMTP_HOST,port:Number(process.env.SMTP_PORT)||587,secure:process.env.SMTP_SECURE==='true',auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASS}});
+  await transporter.sendMail({from:process.env.SMTP_FROM,to:target,subject:'کد ورود آوگون',text:`کد تأیید ورود شما: ${code}\nاین کد تا ۵ دقیقه معتبر است. اگر این درخواست از طرف شما نیست، این پیام را نادیده بگیرید.`});
+  return res.json({ok:true,message:'کد تأیید به ایمیل شما ارسال شد.'});
+ }catch(error){
+  await prisma.otpCode.update({where:{id:(await prisma.otpCode.findFirst({where:{target,channel,consumedAt:null},orderBy:{createdAt:'desc'}}))?.id||''},data:{consumedAt:new Date()}}).catch(()=>undefined);
+  return fail(res,502,'ارسال ایمیل ناموفق بود؛ کمی بعد دوباره تلاش کنید');
+ }
+}
+if(process.env.NODE_ENV==='production')return fail(res,503,channel==='phone'?'ارسال پیامک هنوز به ارائه‌دهنده پیامک متصل نشده است':'سرویس SMTP ایمیل هنوز پیکربندی نشده است');
+console.info(`[AVGOON OTP DEVELOPMENT ONLY] ${channel}:${target} code=${code}`);
+res.json({ok:true,development:true,message:'در محیط توسعه، کد فقط در لاگ سرور ثبت شده است؛ ارسال واقعی فعال نیست.'})});
 app.post('/api/auth/verify-otp',async(req,res)=>{const parsed=z.object({target:z.string().min(5).max(150),channel:z.enum(['phone','email']),code:z.string().length(6),name:z.string().trim().min(2).max(120).optional()}).safeParse(req.body);if(!parsed.success)return fail(res,400,'کد یا اطلاعات ورود نامعتبر است');const {target,channel,code,name}=parsed.data;const record=await prisma.otpCode.findFirst({where:{target,channel,consumedAt:null,expiresAt:{gt:new Date()},attempts:{lt:5}},orderBy:{createdAt:'desc'}});if(!record)return fail(res,400,'کد منقضی شده یا وجود ندارد');if(!await bcrypt.compare(code,record.codeHash)){await prisma.otpCode.update({where:{id:record.id},data:{attempts:{increment:1}}});return fail(res,400,'کد تأیید اشتباه است')};await prisma.otpCode.update({where:{id:record.id},data:{consumedAt:new Date()}});const where=channel==='phone'?{phone:target}:{email:target};const create=channel==='phone'?{phone:target,name:name||null}:{email:target,name:name||null};const user=await prisma.user.upsert({where,create,update:name?{name}:{}});const token=jwt.sign({sub:user.id,role:user.role},secret,{expiresIn:'7d'});res.json({token,user:{id:user.id,name:user.name,phone:user.phone,email:user.email,role:user.role}})});
 const productSchema=z.object({sku:z.string().min(1),name:z.string().min(2),slug:z.string().min(2),description:z.string().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string()]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().default('عدد'),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean().default(false)});
 app.post('/api/admin/products',auth('ADMIN'),async(req,res)=>{const parsed=productSchema.safeParse(req.body);if(!parsed.success)return res.status(400).json({ok:false,errors:parsed.error.flatten()});const {categorySlug,priceToman,...data}=parsed.data;const p=await prisma.product.create({data:{...data,priceToman:priceToman===undefined?null:BigInt(priceToman),category:categorySlug?{connect:{slug:categorySlug}}:undefined}});res.status(201).json(p)});
