@@ -140,7 +140,7 @@ app.post('/api/admin/bootstrap',async c=>{
 
 async function requireUser(c:any,next:any){
   try {
-    const token=(c.req.header('Authorization')||'').replace(/^Bearer\\s+/i,'');
+    const token=(c.req.header('Authorization')||'').replace(/^Bearer\s+/i,'');
     if(!token)return fail(c,401,'ابتدا وارد حساب کاربری شوید');
     const {payload}=await jwtVerify(token,enc.encode(c.env.JWT_SECRET));
     if(!payload.sub)return fail(c,401,'نشست معتبر نیست');
@@ -239,16 +239,16 @@ function parseCsv(input:string):string[][] {
     if(quoted){if(ch==='"'&&input[i+1]==='"'){field+='"';i++;}else if(ch==='"')quoted=false;else field+=ch;}
     else if(ch==='"')quoted=true;
     else if(ch===','){row.push(field);field='';}
-    else if(ch==='\\n'){row.push(field.replace(/\\r$/,''));rows.push(row);row=[];field='';}
+    else if(ch==='\n'){row.push(field.replace(/\r$/,''));rows.push(row);row=[];field='';}
     else field+=ch;
   }
   if(quoted)throw new Error('CSV_INVALID_QUOTES');
-  if(field.length||row.length){row.push(field.replace(/\\r$/,''));rows.push(row);}
+  if(field.length||row.length){row.push(field.replace(/\r$/,''));rows.push(row);}
   return rows;
 }
 const productUpdateSchema=z.object({
   sku:z.string().min(1).max(80).optional(),name:z.string().min(2).max(200).optional(),slug:z.string().min(2).max(220).optional(),
-  description:z.string().max(5000).nullable().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\\d+$/),z.null()]).optional(),
+  description:z.string().max(5000).nullable().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\d+$/),z.null()]).optional(),
   stock:z.number().int().nonnegative().optional(),unit:z.string().min(1).max(30).optional(),brand:z.string().max(100).nullable().optional(),
   categorySlug:z.string().max(120).nullable().optional(),imageUrl:z.string().url().nullable().optional(),isPublished:z.boolean().optional(),
   technicalSpecs:z.record(z.string(),z.unknown()).nullable().optional()
@@ -290,7 +290,7 @@ app.post('/api/admin/products/import-csv',async c=>{
     if(rows[i].every(v=>!v.trim()))continue;
     const get=(key:string)=>{const idx=headers.findIndex(h=>aliases[key].includes(h));return idx<0?'':(rows[i][idx]||'').trim();};
     const raw={sku:get('sku'),name:get('name'),slug:get('slug')||get('sku').toLowerCase().replace(/[^a-z0-9-]+/g,'-'),description:get('description')||undefined,priceToman:get('priceToman')||undefined,stock:Number(get('stock')||0),unit:get('unit')||'عدد',brand:get('brand')||undefined,categorySlug:get('categorySlug')||undefined,imageUrl:get('imageUrl')||undefined,isPublished:['1','true','yes','بله'].includes(get('isPublished').toLowerCase())};
-    const p=z.object({sku:z.string().min(1).max(80),name:z.string().min(2).max(200),slug:z.string().min(2).max(220),description:z.string().optional(),priceToman:z.string().regex(/^\\d+$/).optional(),stock:z.number().int().nonnegative(),unit:z.string().min(1).max(30),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean()}).safeParse(raw);
+    const p=z.object({sku:z.string().min(1).max(80),name:z.string().min(2).max(200),slug:z.string().min(2).max(220),description:z.string().optional(),priceToman:z.string().regex(/^\d+$/).optional(),stock:z.number().int().nonnegative(),unit:z.string().min(1).max(30),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean()}).safeParse(raw);
     if(!p.success){errors.push({row:i+1,sku:raw.sku,message:'اطلاعات ردیف معتبر نیست'});continue;}
     try{
       const cat=p.data.categorySlug?await stmt(c,'SELECT id FROM Category WHERE slug=?',p.data.categorySlug).first<any>():null;
