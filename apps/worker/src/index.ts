@@ -265,40 +265,6 @@ app.patch('/api/admin/inquiries/:id/status',async c=>{
   const row=await stmt(c,'UPDATE ProjectInquiry SET status=?,updatedAt=? WHERE id=? RETURNING id,status,updatedAt',p.data.status,now(),c.req.param('id')).first();
   return row?c.json(row):fail(c,404,'درخواست مشاوره پیدا نشد');
 });
-app.post('/api/inquiries',async c=>{
-  const p=z.object({
-    name:z.string().trim().min(2).max(120),
-    phone:z.string().trim().min(8).max(20),
-    email:z.union([z.string().trim().email().max(150),z.literal('')]).optional(),
-    projectType:z.string().trim().max(100).optional(),
-    message:z.string().trim().min(5).max(1500),
-    website:z.string().max(200).optional()
-  }).safeParse(await c.req.json().catch(()=>null));
-  if(!p.success)return c.json({ok:false,message:'اطلاعات درخواست معتبر نیست',errors:p.error.flatten()},400);
-  if(p.data.website)return c.json({ok:true,message:'درخواست ثبت شد.'},201);
-  const phone=p.data.phone.replace(/[\s()-]/g,'');
-  if(!/^\+?[0-9]{8,15}$/.test(phone))return fail(c,400,'شماره تماس معتبر نیست');
-  const recent=await stmt(c,'SELECT COUNT(*) AS n FROM ProjectInquiry WHERE phone=? AND createdAt>=?',phone,new Date(Date.now()-3600000).toISOString()).first<any>();
-  if((recent?.n||0)>=3)return fail(c,429,'برای این شماره در یک ساعت اخیر بیش از حد درخواست ثبت شده است');
-  const id=crypto.randomUUID(),time=now();
-  await stmt(c,"INSERT INTO ProjectInquiry(id,name,phone,email,projectType,message,status,createdAt,updatedAt) VALUES(?,?,?,?,?,?,'NEW',?,?)",id,p.data.name,phone,p.data.email||null,p.data.projectType||null,p.data.message,time,time).run();
-  return c.json({ok:true,id,message:'درخواست مشاوره شما ثبت شد.'},201);
-});
-app.get('/api/admin/inquiries',async c=>{
-  const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||50)),status=c.req.query('status')||'';
-  const where="(?='' OR status=?)";
-  const [{results=[]},{results:counts=[]}]=await Promise.all([
-    stmt(c,'SELECT id,name,phone,email,projectType,message,status,createdAt,updatedAt FROM ProjectInquiry WHERE '+where+' ORDER BY createdAt DESC LIMIT ? OFFSET ?',status,status,limit,(page-1)*limit).all(),
-    stmt(c,'SELECT COUNT(*) AS total FROM ProjectInquiry WHERE '+where,status,status).all()
-  ]);
-  return c.json({items:results,total:counts[0]?.total||0,page,limit});
-});
-app.patch('/api/admin/inquiries/:id/status',async c=>{
-  const p=z.object({status:z.enum(['NEW','CONTACTED','CLOSED'])}).safeParse(await c.req.json().catch(()=>null));
-  if(!p.success)return fail(c,400,'وضعیت درخواست معتبر نیست');
-  const row=await stmt(c,'UPDATE ProjectInquiry SET status=?,updatedAt=? WHERE id=? RETURNING id,status,updatedAt',p.data.status,now(),c.req.param('id')).first<any>();
-  return row?c.json(row):fail(c,404,'درخواست پیدا نشد');
-});
 app.get('/api/admin/summary',async c=>{
   const row=await stmt(c,`SELECT (SELECT COUNT(*) FROM User) AS users,(SELECT COUNT(*) FROM "Order") AS orders,(SELECT COUNT(*) FROM "Order" WHERE status='PENDING') AS pendingOrders,(SELECT COALESCE(SUM(totalToman),0) FROM "Order" WHERE status IN ('PAID','PROCESSING','SHIPPED','COMPLETED')) AS paidTotalToman`).first<any>();
   return c.json(row);
