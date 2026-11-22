@@ -110,10 +110,10 @@ app.post('/api/auth/request-otp', async (c) => {
   const id = crypto.randomUUID();
   await sql`INSERT INTO "OtpCode"(id,target,channel,"codeHash","expiresAt") VALUES(${id},${target},'email',${codeHash},NOW()+INTERVAL '5 minutes')`;
   try {
-    const response = await fetch('https://api.resend.com/emails', {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${c.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: c.env.RESEND_FROM, to: [target], subject: 'کد ورود آوگون', text: `کد تأیید ورود شما: ${code}\nاین کد تا ۵ دقیقه معتبر است.` })
+      headers: { 'api-key': c.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: c.env.BREVO_SENDER_EMAIL, to: [target], subject: 'کد ورود آوگون', text: `کد تأیید ورود شما: ${code}\nاین کد تا ۵ دقیقه معتبر است.` })
     });
     if (!response.ok) throw new Error('EMAIL_PROVIDER_ERROR');
     return c.json({ ok: true, message: 'کد تأیید به ایمیل شما ارسال شد.' });
