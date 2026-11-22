@@ -1,41 +1,87 @@
-# AVGOON API deployment checklist
+# AVGOON — zero-cost deployment path
 
-## Required environment
-- `DATABASE_URL`: PostgreSQL connection string for the API database.
-- `JWT_SECRET`: random secret with at least 32 characters.
-- `ADMIN_BOOTSTRAP_TOKEN`: one-time first-admin setup secret with at least 32 characters.
-- `WEB_ORIGIN`: exact HTTPS origin of the deployed storefront.
-- `SMTP_HOST`, `SMTP_PORT` (default 587), `SMTP_SECURE` (`true` for implicit TLS), `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`: required for real email OTP delivery.
-- `NODE_ENV=production`.
+This configuration deliberately uses free tiers only. No paid Render plan or Render Postgres instance is required.
 
-## Render web service settings
+## Free hosting architecture
+
+| Component | Provider | Free tier purpose |
+|---|---|---|
+| Storefront | Cloudflare Pages | Static files in `docs/`; production site at a `.pages.dev` address |
+| API | Render Free Web Service | Node/Express API; sleeps after 15 minutes idle and may take about a minute to wake |
+| PostgreSQL | Neon Free | Persistent hosted PostgreSQL; use the pooled connection string |
+| Email OTP | Resend Free | HTTPS email API; up to 3,000 emails/month and 100/day; sender domain must be verified |
+| Source and CI | GitHub Free | Repository and automated tests |
+
+Do not use Render's Free Postgres for customer data: free databases expire after 30 days and have no backups. Use Neon for the persistent database instead.
+
+## 1. Storefront — Cloudflare Pages
+
+Connect the GitHub repository `saeed860/Avgoon` to Cloudflare Pages with:
+- Production branch: `main` after the reviewed PR is merged.
+- Root directory: `docs`
+- Build command: leave empty (the storefront is static HTML/CSS/JS).
+- Build output directory: `.`
+- No build environment variables are needed for the static upload.
+
+The Pages hostname is created by Cloudflare. After the API is deployed, set that exact origin as `WEB_ORIGIN` in Render and configure `docs/config.js` with the API's HTTPS base URL.
+
+GitHub Pages is not the selected production host: GitHub's Pages policy says it is not intended for sites primarily facilitating commercial transactions.
+
+## 2. Database — Neon Free
+
+Create a PostgreSQL project on Neon's Free plan:
+- Create a database named `avgoon`.
+- Copy the pooled connection string (hostname commonly includes `-pooler`).
+- Add `?sslmode=require` if it is not already included.
+- Save it as Render's `DATABASE_URL` secret.
+
+The Free plan currently includes 1 GB per project and 100 compute-hours per project per month. Compute scales to zero after inactivity. Monitor usage and keep independent backups/exports of important business data.
+
+## 3. API — Render Free
+
+The repository includes `render.yaml`. In Render, create a Blueprint from this repository and choose the free web-service plan. Confirm that no paid resources are selected.
+
+The Blueprint configures:
 - Root directory: `apps/api`
-- Build command: `npm install && npx prisma generate && npm run build`
-- Start command: `npm start`
-- Health check path: `/api/health`
-- Set `WEB_ORIGIN` to the exact storefront origin (for GitHub Pages, `https://saeed860.github.io`, without the repository path).
-- Render provides `PORT`; the API binds to it on `0.0.0.0`.
+- Build: `npm install && npx prisma generate && npm run build`
+- Start: `npx prisma migrate deploy && npm start`
+- Health check: `/api/health`
+- Region: Frankfurt
+- Plan: Free
 
-## Database release
-Configure the database connection and run the committed Prisma migrations before starting the API:
+Render Free services sleep after 15 minutes without inbound traffic; the first request after sleep may take about a minute. The filesystem is ephemeral, so uploaded files must not be stored locally. Customer data belongs in Neon.
 
-```sh
-npx prisma migrate deploy
-npx prisma generate
-npm run build
-npm start
+Render blocks outbound SMTP ports 25, 465 and 587 on Free web services. Email delivery therefore uses Resend's HTTPS API rather than SMTP.
+
+## 4. Required secrets and settings
+
+Render's Blueprint creates random values for `JWT_SECRET` and `ADMIN_BOOTSTRAP_TOKEN`. Set these remaining variables manually:
+- `DATABASE_URL`: Neon pooled PostgreSQL connection string.
+- `WEB_ORIGIN`: exact Cloudflare Pages origin, e.g. `https://avgoon.pages.dev` (replace with the actual assigned hostname).
+- `RESEND_API_KEY`: Resend API key.
+- `RESEND_FROM`: verified sender, e.g. `Avgoon <no-reply@your-verified-domain>`.
+- `NODE_ENV=production` is already configured by the Blueprint.
+
+Resend Free requires a verified sender domain for real customer delivery. Do not enable email login until the sender domain is verified and an actual message is tested. SMS login remains disabled until a free SMS provider is selected and a dedicated adapter is implemented.
+
+## 5. Configure the storefront API URL
+
+Edit `docs/config.js` after Render assigns the API hostname and set:
+```js
+window.AVGOON_API_URL = 'https://YOUR-AVGOON-API.onrender.com';
 ```
+Then deploy the updated `docs/` directory to Cloudflare Pages. Never place secret keys in this file; it is public browser code.
 
-The initial migration is in `prisma/migrations/20261122090000_init`. It creates the schema only; it does not create a first administrator or insert product data.
+## 6. First administrator
 
-## First administrator
-1. Register and verify the intended account after a real OTP delivery adapter has been configured.
-2. Open `/first-admin.html` over HTTPS.
-3. Supply the API HTTPS base URL, the account's verified email or phone, and the one-time bootstrap token.
-4. Remove `ADMIN_BOOTSTRAP_TOKEN` from the service environment after the first administrator is created.
+1. Deploy the storefront and API, and verify `/api/health`.
+2. Configure and test real email OTP using the verified Resend sender.
+3. Register the intended administrator account and verify its email.
+4. Open `/first-admin.html`, enter the API URL, verified email and the one-time bootstrap token.
+5. After success, remove `ADMIN_BOOTSTRAP_TOKEN` from Render environment variables and redeploy.
 
-## OTP production gate
-Email OTP is delivered through SMTP when all SMTP variables above are configured. SMS OTP remains disabled until a provider-specific adapter is implemented. Test SMTP delivery before enabling customer sign-in.
+## 7. Release safety
 
-## Release safety
-Do not point the storefront at the API until CI passes, a hosted PostgreSQL database is provisioned, migrations have been applied, and the health endpoint returns `ok: true`.
+The initial migration is in `prisma/migrations/20261122090000_init`. Render runs committed migrations on service start. Do not import live customer data or open real orders until the API, email delivery, backups, checkout/payment integration and end-to-end tests have been verified.
+
+Free-tier services are suitable for development and a small pilot, not a high-availability commercial launch. Check the providers' current quotas regularly.
