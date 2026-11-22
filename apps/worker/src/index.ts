@@ -425,6 +425,7 @@ app.post('/api/admin/products/import-csv',async c=>{
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(sku) DO UPDATE SET name=excluded.name,slug=excluded.slug,description=excluded.description,priceToman=excluded.priceToman,stock=excluded.stock,unit=excluded.unit,brand=excluded.brand,imageUrl=excluded.imageUrl,isPublished=excluded.isPublished,categoryId=excluded.categoryId,updatedAt=excluded.updatedAt`,
         id,p.data.sku,p.data.name,p.data.slug,p.data.description||null,p.data.priceToman||null,p.data.stock,p.data.unit,p.data.brand||null,p.data.imageUrl||null,p.data.isPublished?1:0,cat?.id||null,t,t).run();
+      await replaceProductImages(c,id,p.data.imageUrl?[{url:p.data.imageUrl,alt:p.data.name}]:[]);
       existing?updated++:created++;
     }catch(e){errors.push({row:i+1,sku:raw.sku,message:String(e).includes('CATEGORY_NOT_FOUND')?'دسته‌بندی پیدا نشد':'ثبت ردیف ناموفق بود؛ احتمالاً نامک تکراری است'});}
   }
