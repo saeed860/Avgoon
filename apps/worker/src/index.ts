@@ -74,7 +74,7 @@ async function issueToken(env: Env, user: {id:string;role:string}) {
 app.use('/api/*', cors({
   origin: (origin,c) => {
     const previewOrigin = /^https:\/\/[a-z0-9-]+\.avgoon-store\.pages\.dev$/.test(origin || '');
-    return origin === c.env.WEB_ORIGIN || previewOrigin ? origin : '';
+    return origin === 'https://avgoon-store.pages.dev' || origin === c.env.WEB_ORIGIN || previewOrigin ? origin : '';
   },
   allowMethods: ['GET','POST','PATCH','OPTIONS'],
   allowHeaders: ['Content-Type','Authorization','Idempotency-Key'], maxAge: 86400
