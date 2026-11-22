@@ -77,11 +77,13 @@ app.post('/api/inquiries',async c=>{
   }).safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return fail(c,400,'اطلاعات درخواست مشاوره معتبر نیست');
   if(p.data.website)return c.json({ok:true,message:'درخواست شما ثبت شد.'},201);
-  const phone=p.data.phone.replace(/[\s()-]/g,'');
+  const phone=p.data.phone.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[\s()-]/g,'');
   if(!/^\+?[0-9]{8,15}$/.test(phone))return fail(c,400,'شماره تماس معتبر نیست');
   const ip=c.req.header('CF-Connecting-IP')||'unknown';
   const ipHash=await hashKey(ip+':'+c.env.JWT_SECRET);
   const since=new Date(Date.now()-3600000).toISOString();
+  const retention=new Date(Date.now()-86400000).toISOString();
+  await stmt(c,"DELETE FROM OtpCode WHERE channel='inquiry' AND createdAt<?",retention).run();
   const recent=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='inquiry' AND createdAt>?",ipHash,since).first<any>();
   if((recent?.n||0)>=5)return fail(c,429,'تعداد درخواست‌ها بیش از حد مجاز است؛ یک ساعت دیگر تلاش کنید');
   const timestamp=now();
