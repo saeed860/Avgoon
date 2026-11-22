@@ -21,4 +21,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - name: Report dependency advisories
+        run: |
+          npm audit --json > /tmp/audit.json || true
+          node -e "const a=require('/tmp/audit.json'); for(const [name,v] of Object.entries(a.vulnerabilities||{})) console.log(name, 'severity='+v.severity, 'direct='+v.isDirect, 'range='+v.range, 'fix='+JSON.stringify(v.fixAvailable))"
       - run: npm run typecheck
