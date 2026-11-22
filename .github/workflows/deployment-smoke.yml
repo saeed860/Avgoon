@@ -64,6 +64,14 @@ jobs:
           grep -q "/api/admin/bootstrap" /tmp/first-admin.html
           echo "First admin setup PASS"
           echo "Pages storefront, product editor, Excel import and first-admin setup PASS"
+          node - <<'NODE'
+          const fs = require('fs');
+          const html = fs.readFileSync('/tmp/store.html','utf8');
+          if (!html.includes("addCart('${esc(p.id)}')") || !html.includes("qty('${esc(p.id)}',-1)")) {
+            throw new Error('UUID product IDs are not quoted in cart actions');
+          }
+          console.log('UUID cart action quoting PASS');
+          NODE
           python3 - <<'PY'
           from pathlib import Path
           import re
