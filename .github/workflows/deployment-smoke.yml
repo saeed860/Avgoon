@@ -69,6 +69,11 @@ jobs:
           grep -q "checkoutModal" /tmp/store.html
           grep -q "cEmail" /tmp/store.html
           grep -q "submitConsult" /tmp/store.html
+          grep -q "filterProducts('سازه‌های فلزی')" /tmp/store.html
+          grep -q "filterProducts('عایق‌ها')" /tmp/store.html
+          grep -q "filterProducts('ملزومات اجرا')" /tmp/store.html
+          grep -q "PL_RKM39_8815.png" /tmp/store.html
+          grep -q "media.adeo.com/mkp" /tmp/store.html
           grep -q "/api/inquiries" /tmp/store.html
           grep -q "avgoon_products" /tmp/store.html
           if grep -q "پنل گچی ساده ۱۲.۵ میلی‌متر" /tmp/store.html; then echo "Demo products must not appear in storefront"; exit 1; fi
