@@ -113,7 +113,7 @@ app.post('/api/auth/request-otp', async (c) => {
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: { 'api-key': c.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: c.env.BREVO_SENDER_EMAIL, to: [target], subject: 'کد ورود آوگون', text: `کد تأیید ورود شما: ${code}\nاین کد تا ۵ دقیقه معتبر است.` })
+      body: JSON.stringify({ sender: { name: 'آوگون', email: c.env.BREVO_SENDER_EMAIL }, to: [{ email: target }], subject: 'کد ورود آوگون', textContent: `کد تأیید ورود شما: ${code}\nاین کد تا ۵ دقیقه معتبر است.` })
     });
     if (!response.ok) throw new Error('EMAIL_PROVIDER_ERROR');
     return c.json({ ok: true, message: 'کد تأیید به ایمیل شما ارسال شد.' });
