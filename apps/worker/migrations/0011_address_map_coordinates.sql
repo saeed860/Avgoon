@@ -1,0 +1,2 @@
+ALTER TABLE Address ADD COLUMN latitude REAL CHECK(latitude IS NULL OR latitude BETWEEN -90 AND 90);
+ALTER TABLE Address ADD COLUMN longitude REAL CHECK(longitude IS NULL OR longitude BETWEEN -180 AND 180);
