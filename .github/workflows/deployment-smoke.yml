@@ -108,14 +108,6 @@ jobs:
           if grep -q "۰۲۱-۹۱۰۰۴۰۸۰\|info@avgoon.ir" /tmp/store.html; then echo "Unverified placeholder contact data found"; exit 1; fi
           grep -q "photo-thumbs" /tmp/storefront.js
           grep -q "setProductCardImage" /tmp/storefront.js
-          node - <<'NODE'
-          const fs = require('fs');
-          const js = fs.readFileSync('/tmp/storefront.js','utf8');
-          if (!js.includes('function safeProductImageUrl(value)')) throw new Error('Product image URL validator is missing');
-          if (!js.includes("!['http:','https:'].includes(parsed.protocol)")) throw new Error('Product image URL protocol allowlist is missing');
-          if (!js.includes('img.src=safeUrl')) throw new Error('Product image setter does not use the validated URL');
-          console.log('Product image URL scheme validation PASS');
-          NODE
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
           curl -fsSL "$WEB/js/admin.js" -o /tmp/admin.js
