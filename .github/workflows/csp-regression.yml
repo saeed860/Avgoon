@@ -13,4 +13,14 @@ jobs:
           node-version: 22
       - run: node scripts/check-csp.mjs
       - run: node --check docs/js/storefront.js
+      - name: Validate product image URL schemes
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const js = fs.readFileSync('docs/js/storefront.js','utf8');
+          if (!js.includes('function safeProductImageUrl(value)')) throw new Error('Product image URL validator is missing');
+          if (!js.includes("!['http:','https:'].includes(parsed.protocol)")) throw new Error('Product image URL protocol allowlist is missing');
+          if (!js.includes('img.src=safeUrl')) throw new Error('Product image setter does not use the validated URL');
+          console.log('Product image URL scheme validation PASS');
+          NODE
       - run: node --check docs/js/admin.js
