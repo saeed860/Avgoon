@@ -71,7 +71,7 @@ async function sameSecret(a: string, b: string) {
   const aa=new Uint8Array(x),bb=new Uint8Array(y); let d=0; for(let i=0;i<aa.length;i++) d|=aa[i]^bb[i]; return d===0;
 }
 async function issueToken(env: Env, user: {id:string;role:string}) {
-  return new SignJWT({role:user.role}).setProtectedHeader({alg:'HS256'}).setSubject(user.id).setIssuedAt().setExpirationTime('7d').sign(enc.encode(env.JWT_SECRET));
+  return new SignJWT({role:user.role}).setProtectedHeader({alg:'HS256'}).setSubject(user.id).setIssuer('avgoon-api').setAudience('avgoon-web').setIssuedAt().setExpirationTime('12h').sign(enc.encode(env.JWT_SECRET));
 }
 
 app.use('/api/*', cors({
@@ -209,7 +209,7 @@ app.post('/api/auth/verify-otp', async c => {
 async function requireAdmin(c:any,next:any){
   try{
     const token=(c.req.header('Authorization')||'').replace(/^Bearer\s+/i,''); if(!token)return fail(c,401,'ابتدا وارد حساب کاربری شوید');
-    const {payload}=await jwtVerify(token,enc.encode(c.env.JWT_SECRET)); if(!payload.sub)return fail(c,401,'نشست معتبر نیست');
+    const {payload}=await jwtVerify(token,enc.encode(c.env.JWT_SECRET),{issuer:'avgoon-api',audience:'avgoon-web'}); if(!payload.sub)return fail(c,401,'نشست معتبر نیست');
     const user=await stmt(c,'SELECT id,role FROM User WHERE id=?',payload.sub).first<any>();
     if(!user)return fail(c,401,'حساب کاربری پیدا نشد'); if(user.role!=='ADMIN')return fail(c,403,'دسترسی غیرمجاز');
     c.set('user',user); await next();
@@ -240,7 +240,7 @@ async function requireUser(c:any,next:any){
   try {
     const token=(c.req.header('Authorization')||'').replace(/^Bearer\s+/i,'');
     if(!token)return fail(c,401,'ابتدا وارد حساب کاربری شوید');
-    const {payload}=await jwtVerify(token,enc.encode(c.env.JWT_SECRET));
+    const {payload}=await jwtVerify(token,enc.encode(c.env.JWT_SECRET),{issuer:'avgoon-api',audience:'avgoon-web'});
     if(!payload.sub)return fail(c,401,'نشست معتبر نیست');
     const user=await stmt(c,'SELECT id,role FROM User WHERE id=?',payload.sub).first<any>();
     if(!user)return fail(c,401,'حساب کاربری پیدا نشد');
