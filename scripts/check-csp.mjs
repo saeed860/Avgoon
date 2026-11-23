@@ -13,17 +13,37 @@ async function walk(dir) {
 }
 await walk(root);
 const failures = [];
-for (const file of [...htmlFiles, ...jsFiles]) {
+const htmlSources = new Map();
+for (const file of htmlFiles) {
   const source = await readFile(file, 'utf8');
-  if (/\son[a-z][a-z0-9_-]*\s*=/i.test(source)) failures.push(file + ': inline event handler in markup');
+  htmlSources.set(file, source);
+  if (/\son[a-z][a-z0-9_-]*\s*=/i.test(source)) failures.push(file + ': inline event handler');
+  if (/<script\b(?![^>]*\bsrc\s*=)[^>]*>/i.test(source)) failures.push(file + ': inline script block');
+  if (/javascript\s*:/i.test(source)) failures.push(file + ': javascript: URL');
+}
+for (const file of jsFiles) {
+  const source = await readFile(file, 'utf8');
+  if (/\son[a-z][a-z0-9_-]*\s*=/i.test(source)) failures.push(file + ': inline event handler in generated markup');
 }
 const headers = await readFile(path.join(root, '_headers'), 'utf8');
 for (const line of headers.split(/\r?\n/).filter(x => /Content-Security-Policy(?:-Report-Only)?:/i.test(x))) {
   const scriptSrc = line.match(/script-src([^;]*)/i)?.[1] || '';
   if (/'unsafe-inline'/i.test(scriptSrc)) failures.push('docs/_headers: unsafe-inline remains in script-src');
 }
+const allHtml = [...htmlSources.values()].join('\n');
+const jsSources = await Promise.all(jsFiles.map(file => readFile(file, 'utf8')));
+const allJs = jsSources.join('\n');
+for (const type of ['click', 'input', 'change']) {
+  if (new RegExp('data-action-' + type + '\\\\s*=').test(allHtml + allJs) &&
+      !new RegExp("addEventListener\\\\(['\\\"]" + type + "['\\\"]").test(allJs)) {
+    failures.push('missing delegated ' + type + ' event listener');
+  }
+}
+if (/\[data-action-overlay\]/.test(allJs) && !/event\.target\s*===\s*overlay/.test(allJs)) {
+  failures.push('overlay action lacks backdrop target guard');
+}
 if (failures.length) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
-console.log('CSP regression PASS: ' + htmlFiles.length + ' HTML pages and ' + jsFiles.length + ' JS files have no inline event handlers; script-src excludes unsafe-inline.');
+console.log('CSP regression PASS: ' + htmlFiles.length + ' HTML pages, ' + jsFiles.length + ' JS files; no inline scripts/handlers or javascript: URLs; delegated event listeners and CSP verified.');
