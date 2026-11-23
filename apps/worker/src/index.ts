@@ -289,10 +289,10 @@ app.patch('/api/me/addresses/:id',requireUser,async c=>{
   const user=c.get('user') as {id:string},id=c.req.param('id'),time=now();
   const current=await stmt(c,'SELECT id,isDefault FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
   if(!current)return fail(c,404,'نشانی پیدا نشد');
-  const values=[p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,time,id,user.id];
-  const update=stmt(c,'UPDATE Address SET recipientName=?,phone=?,province=?,city=?,postalCode=?,address=?,updatedAt=? WHERE id=? AND userId=?',...values);
-  if(p.data.isDefault===true){
-    await c.env.DB.batch([stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1',time,user.id),update,stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=? AND userId=?',time,id,user.id)]);
+  const values=[p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,p.data.isDefault===undefined?Number(current.isDefault):p.data.isDefault?1:0,time,id,user.id];
+  const update=stmt(c,'UPDATE Address SET recipientName=?,phone=?,province=?,city=?,postalCode=?,address=?,isDefault=?,updatedAt=? WHERE id=? AND userId=?',...values);
+  if(values[6]===1){
+    await c.env.DB.batch([stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1',time,user.id),update]);
   }else{
     await c.env.DB.batch([update,stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=(SELECT id FROM Address WHERE userId=? AND id<>? ORDER BY createdAt,id LIMIT 1) AND NOT EXISTS(SELECT 1 FROM Address WHERE userId=? AND isDefault=1)',time,user.id,id,user.id)]);
   }
