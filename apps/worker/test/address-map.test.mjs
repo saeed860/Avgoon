@@ -8,6 +8,7 @@ const migration = await readFile(new URL('../migrations/0011_address_map_coordin
 const storefront = await readFile(new URL('../../../docs/js/storefront.js', import.meta.url), 'utf8');
 const html = await readFile(new URL('../../../docs/index.html', import.meta.url), 'utf8');
 const headers = await readFile(new URL('../../../docs/_headers', import.meta.url), 'utf8');
+const deployWorkflow = await readFile(new URL('../../../.github/workflows/worker-deploy.yml', import.meta.url), 'utf8');
 
 test('address coordinate migration adds nullable, range-checked latitude and longitude', () => {
   assert.match(migration, /ADD COLUMN latitude REAL CHECK\(latitude IS NULL OR latitude BETWEEN -90 AND 90\)/);
@@ -56,4 +57,10 @@ test('account menu provides map click, device location, reverse lookup and saved
 test('storefront script passes JavaScript syntax check', () => {
   const result = spawnSync(process.execPath,['--check',new URL('../../../docs/js/storefront.js',import.meta.url).pathname],{encoding:'utf8'});
   assert.equal(result.status,0,result.stderr||'storefront script syntax check failed');
+});
+
+test('production deploy applies ordered D1 migrations before deploying the Worker', () => {
+  const migration = deployWorkflow.indexOf('npm run db:migrate:remote');
+  const deployment = deployWorkflow.indexOf('name: Deploy Worker to Cloudflare');
+  assert.ok(migration >= 0 && deployment > migration);
 });
