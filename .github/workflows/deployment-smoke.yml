@@ -59,6 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL "$WEB/" -o /tmp/store.html
+          curl -fsSL "$WEB/js/storefront.js" -o /tmp/storefront.js
           curl -fsSI "$WEB/" -D /tmp/page.headers -o /dev/null
           grep -qi "x-content-type-options: nosniff" /tmp/page.headers
           grep -qi "content-security-policy:" /tmp/page.headers
@@ -74,16 +75,16 @@ jobs:
           grep -q "filterProducts('ملزومات اجرا')" /tmp/store.html
           grep -q "PL_RKM39_8815.png" /tmp/store.html
           grep -q "media.adeo.com/mkp" /tmp/store.html
-          grep -q "/api/inquiries" /tmp/store.html
-          grep -q "avgoon_products" /tmp/store.html
-          grep -q "DEMO_PRODUCTS" /tmp/store.html
-          grep -q "نمونه نمایشی" /tmp/store.html
-          grep -q "محصول نمایشی قابل سفارش نیست" /tmp/store.html
+          grep -q "/api/inquiries" /tmp/storefront.js
+          grep -q "avgoon_products" /tmp/storefront.js
+          grep -q "DEMO_PRODUCTS" /tmp/storefront.js
+          grep -q "نمونه نمایشی" /tmp/storefront.js
+          grep -q "محصول نمایشی قابل سفارش نیست" /tmp/storefront.js
           grep -q "demoNotice" /tmp/store.html
           echo "Clearly labelled non-orderable demo catalog PASS"
           if grep -q "۰۲۱-۹۱۰۰۴۰۸۰\|info@avgoon.ir" /tmp/store.html; then echo "Unverified placeholder contact data found"; exit 1; fi
-          grep -q "photo-thumbs" /tmp/store.html
-          grep -q "setProductCardImage" /tmp/store.html
+          grep -q "photo-thumbs" /tmp/storefront.js
+          grep -q "setProductCardImage" /tmp/storefront.js
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
           curl -fsSL "$WEB/js/admin.js" -o /tmp/admin.js
