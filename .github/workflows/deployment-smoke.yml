@@ -25,6 +25,19 @@ jobs:
           node scripts/check-csp.mjs
           node --check docs/js/storefront.js
           node --check docs/js/admin.js
+          node --check docs/js/sales-report.js
+          node - <<'NODE'
+          const fs = require('fs');
+          const html = fs.readFileSync('docs/index.html','utf8');
+          const js = fs.readFileSync('docs/js/storefront.js','utf8');
+          const report = fs.readFileSync('docs/sales-report.html','utf8');
+          for (const id of ['addressMap','addressLocate','addressMapLookup','addressMapClear']) {
+            if (!html.includes('id="' + id + '"')) throw new Error('Missing map control: ' + id);
+          }
+          if (!html.includes('leaflet.js') || !js.includes('nominatim.openstreetmap.org/reverse') || !js.includes('latitude:selectedAddressPoint')) throw new Error('Address map integration is incomplete');
+          if (!report.includes('گزارش فروش آوگون')) throw new Error('Sales report page is missing');
+          console.log('Address map and sales report source PASS');
+          NODE
       - name: Verify deployed Worker API and CORS
         env:
           API: https://avgoon-api.i-am-saeed4700.workers.dev
@@ -66,7 +79,6 @@ jobs:
           set -euo pipefail
           curl -fsSL "$WEB/" -o /tmp/store.html
           curl -fsSL "$WEB/js/storefront.js" -o /tmp/storefront.js
-          curl -fsSL "$WEB/sales-report.html" -o /tmp/sales-report.html
           curl -fsSI "$WEB/" -D /tmp/page.headers -o /dev/null
           grep -qi "x-content-type-options: nosniff" /tmp/page.headers
           grep -qi "content-security-policy:" /tmp/page.headers
@@ -92,14 +104,6 @@ jobs:
           if grep -q "۰۲۱-۹۱۰۰۴۰۸۰\|info@avgoon.ir" /tmp/store.html; then echo "Unverified placeholder contact data found"; exit 1; fi
           grep -q "photo-thumbs" /tmp/storefront.js
           grep -q "setProductCardImage" /tmp/storefront.js
-          grep -q "addressMap" /tmp/store.html
-          grep -q "addressMapLookup" /tmp/store.html
-          grep -q "nominatim.openstreetmap.org/reverse" /tmp/storefront.js
-          grep -q "latitude:selectedAddressPoint" /tmp/storefront.js
-          grep -q "leaflet.js" /tmp/store.html
-          echo "Customer address map picker PASS"
-          grep -q "گزارش فروش آوگون" /tmp/sales-report.html
-          echo "Sales report page PASS"
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
           curl -fsSL "$WEB/js/admin.js" -o /tmp/admin.js
