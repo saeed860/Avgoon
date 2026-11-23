@@ -35,7 +35,7 @@ jobs:
             if (!html.includes('id="' + id + '"')) throw new Error('Missing map control: ' + id);
           }
           if (!html.includes('leaflet.js') || !js.includes('nominatim.openstreetmap.org/reverse') || !js.includes('latitude:selectedAddressPoint')) throw new Error('Address map integration is incomplete');
-          const filterDefinitions = js.match(/function filterProducts\\(c\\)/g) || [];
+          const filterDefinitions = js.match(/function filterProducts\(c\)/g) || [];
           if (filterDefinitions.length !== 1 || !js.includes('function filterProducts(c){filter=c;catalogPage=1;loadStoreProducts()}')) throw new Error('Category filters must reload the server catalog and reset pagination');
           if (!report.includes('گزارش فروش آوگون')) throw new Error('Sales report page is missing');
           console.log('Address map and sales report source PASS');
