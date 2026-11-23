@@ -39,7 +39,7 @@ test('address API validates phone numbers with optional plus prefix and coordina
   assert.ok(worker.includes("phone:z.string().trim().regex(/^\\+?[0-9]{10,15}$/"));
   assert.match(worker,/latitude:z\.number\(\)\.min\(-90\)\.max\(90\)\.nullable\(\)\.optional\(\)/);
   assert.match(worker,/longitude:z\.number\(\)\.min\(-180\)\.max\(180\)\.nullable\(\)\.optional\(\)/);
-  assert.match(worker,/\(v\.latitude==null\)==\=(v\.longitude==null)/);
+  assert.ok(worker.includes('v=>(v.latitude==null)===(v.longitude==null)'));
   assert.match(worker,/latitude,longitude,isDefault/);
 });
 
