@@ -307,7 +307,7 @@ app.get('/api/admin/summary',async c=>{
 });
 app.get('/api/admin/reports/sales',async c=>{
   const from=c.req.query('from')||'',to=c.req.query('to')||'';
-  const validDate=(v:string)=>/^\\d{4}-\\d{2}-\\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+  const validDate=(v:string)=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
   if(!validDate(from)||!validDate(to)||from>to)return fail(c,400,'بازه تاریخ معتبر نیست');
   const paid="('PAID','PROCESSING','SHIPPED','COMPLETED')";
   const [{results:summary=[]},{results:daily=[]},{results:statuses=[]}]=await Promise.all([
