@@ -156,10 +156,18 @@ app.post('/api/auth/request-otp', async c => {
   if(channel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target)) return fail(c,400,'شماره موبایل معتبر نیست');
   if(channel==='phone') return fail(c,503,'ورود با پیامک هنوز به ارائه‌دهنده پیامک متصل نشده است');
   if(!c.env.RESEND_API_KEY) return fail(c,503,'سرویس ایمیل هنوز پیکربندی نشده است');
-  const recent=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='email' AND createdAt>=?",target,new Date(Date.now()-900000).toISOString()).first<{n:number}>();
+  const windowStart=new Date(Date.now()-900000).toISOString();
+  const recent=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='email' AND createdAt>=?",target,windowStart).first<{n:number}>();
   if((recent?.n||0)>=5) return fail(c,429,'تعداد درخواست‌ها بیش از حد مجاز است؛ بعداً دوباره تلاش کنید');
-  const code=randomOtp(), id=crypto.randomUUID();
-  await stmt(c,'INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,createdAt) VALUES(?,?,?,?,?,?)',id,target,'email',await hashOtp(code),new Date(Date.now()+300000).toISOString(),now()).run();
+  const ip=c.req.header('CF-Connecting-IP')||'unknown';
+  const ipHash=await hashKey(ip+':'+c.env.JWT_SECRET);
+  const ipRecent=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='email-ip' AND createdAt>=?",ipHash,windowStart).first<{n:number}>();
+  if((ipRecent?.n||0)>=10) return fail(c,429,'از این شبکه درخواست‌های زیادی ثبت شده است؛ ۱۵ دقیقه دیگر تلاش کنید');
+  const code=randomOtp(), id=crypto.randomUUID(), ipMarkerId=crypto.randomUUID(), timestamp=now();
+  await c.env.DB.batch([
+    stmt(c,'INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,createdAt) VALUES(?,?,?,?,?,?)',id,target,'email',await hashOtp(code),new Date(Date.now()+300000).toISOString(),timestamp),
+    stmt(c,"INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt) VALUES(?,?,'email-ip','rate-limit',?,?,?)",ipMarkerId,ipHash,new Date(Date.now()+900000).toISOString(),timestamp,timestamp)
+  ]);
   try {
     const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${c.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:c.env.RESEND_FROM_EMAIL||'آوگون <onboarding@resend.dev>',to:[target],subject:'کد ورود آوگون',text:`کد تأیید ورود شما: ${code}\\nاین کد تا ۵ دقیقه معتبر است.`})});
     if(!response.ok) throw new Error('EMAIL_PROVIDER_ERROR');
