@@ -35,6 +35,8 @@ jobs:
             if (!html.includes('id="' + id + '"')) throw new Error('Missing map control: ' + id);
           }
           if (!html.includes('leaflet.js') || !js.includes('nominatim.openstreetmap.org/reverse') || !js.includes('latitude:selectedAddressPoint')) throw new Error('Address map integration is incomplete');
+          const filterDefinitions = js.split('function filterProducts(c)').length - 1;
+          if (filterDefinitions !== 1 || !js.includes('function filterProducts(c){filter=c;catalogPage=1;loadStoreProducts()}')) throw new Error('Category filters must reload the server catalog and reset pagination');
           const addressFallback = js.slice(js.indexOf('async function loadMyAddresses()'), js.indexOf('let addressMap='));
           if (!addressFallback.includes("localStorage.setItem(localAddressModeKey(),'local')") || !addressFallback.includes('renderAddressList(box,readLocalAddressBook(),true)')) throw new Error('Local address fallback mode is not persisted after server failure');
           if (!report.includes('گزارش فروش آوگون')) throw new Error('Sales report page is missing');
