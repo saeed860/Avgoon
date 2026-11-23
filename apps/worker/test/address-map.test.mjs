@@ -19,7 +19,7 @@ test('address coordinate migration adds nullable, range-checked latitude and lon
     'db.executescript(open(sys.argv[1],encoding="utf-8").read())',
     'db.executescript(open(sys.argv[2],encoding="utf-8").read())',
     'db.executescript(open(sys.argv[3],encoding="utf-8").read())',
-    'db.execute("INSERT INTO User(id,createdAt) VALUES(?,?)', '("u1","2026-01-01"))',
+    'db.execute("INSERT INTO User(id,createdAt) VALUES(?,?)",("u1","2026-01-01"))',
     'db.execute("INSERT INTO Address(id,userId,recipientName,phone,province,city,postalCode,address,latitude,longitude,isDefault,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",("a1","u1","گیرنده","09120000000","تهران","تهران","1234567890","نشانی معتبر برای آزمون",35.7,51.4,1,"now","now"))',
     'assert db.execute("SELECT latitude,longitude FROM Address WHERE id=\'a1\'").fetchone()==(35.7,51.4)',
     'try:',
