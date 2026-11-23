@@ -26,6 +26,9 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
+      - name: Apply additive D1 migrations before Worker deploy
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npm run db:migrate:remote
       - name: Deploy Worker to Cloudflare
         if: env.CLOUDFLARE_API_TOKEN != ''
         uses: cloudflare/wrangler-action@v3
