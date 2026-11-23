@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>گزارش فروش | آوگون</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Estedad:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#20252b;--orange:#ef8125;--bg:#f4f5f6;--line:#e7e9eb;--muted:#77818a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Estedad,Tahoma,sans-serif}
+main{max-width:1180px;margin:auto;padding:28px}.top,.panelhead,.tools,.foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:23px;margin:0}.muted{color:var(--muted);font-size:12px}.btn{border:0;background:var(--orange);color:#fff;padding:10px 17px;border-radius:5px;cursor:pointer;font:inherit;text-decoration:none}.btn.light{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.panel,.stat{background:#fff;border:1px solid var(--line);border-radius:8px}.panel{margin-top:20px;overflow:hidden}.panelhead{padding:18px;border-bottom:1px solid var(--line)}.tools input{font:inherit;border:1px solid var(--line);border-radius:5px;padding:9px;background:white}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:18px}.stat{padding:16px}.stat small{color:var(--muted);font-size:12px}.stat strong{display:block;font-size:23px;margin-top:8px;overflow-wrap:anywhere}
+.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:620px}th,td{text-align:right;padding:13px 16px;border-bottom:1px solid #eff0f1;font-size:12px}th{background:#fafafa;color:#707981}
+.foot{padding:14px 18px}.message{padding:14px;color:var(--muted);font-size:13px}.error{color:#b23b32}
+@media(max-width:700px){main{padding:16px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.top h1{font-size:19px}}
+</style>
+<script src="config.js"></script><script defer src="js/sales-report.js"></script>
+</head>
+<body><main>
+<header class="top"><div><h1>گزارش فروش آوگون</h1><p class="muted">گزارش سفارش‌ها بر اساس تاریخ ثبت و وضعیت پرداخت</p></div><div class="tools"><a class="btn light" href="admin.html">بازگشت به مدیریت</a><button class="btn light" id="logout" type="button">خروج امن</button></div></header>
+<section class="panel"><div class="panelhead"><strong>محدوده گزارش</strong><div class="tools"><label class="muted">از <input id="from" type="date" required></label><label class="muted">تا <input id="to" type="date" required></label><button class="btn" id="apply" type="button">نمایش گزارش</button><button class="btn light" id="csv" type="button" disabled>دریافت CSV</button></div></div>
+<div class="stats"><div class="stat"><small>فروش پرداخت‌شده (تومان)</small><strong id="paidTotal">—</strong></div><div class="stat"><small>سفارش‌های پرداخت‌شده</small><strong id="paidCount">—</strong></div><div class="stat"><small>کل سفارش‌ها</small><strong id="orderCount">—</strong></div><div class="stat"><small>در انتظار / لغوشده</small><strong id="pendingCancelled">—</strong></div></div>
+<div class="tablewrap"><table><thead><tr><th>تاریخ</th><th>کل سفارش‌ها</th><th>پرداخت‌شده</th><th>فروش پرداخت‌شده (تومان)</th></tr></thead><tbody id="daily"><tr><td colspan="4" class="message">برای مشاهده، بازه تاریخ را انتخاب کنید.</td></tr></tbody></table></div>
+<div class="foot"><span id="range" class="muted"></span><span id="statusBreakdown" class="muted"></span></div><div id="message" class="message" role="status" aria-live="polite"></div>
+</section></main></body></html>
