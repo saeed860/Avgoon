@@ -169,8 +169,9 @@ app.post('/api/auth/request-otp', async c => {
         AND (SELECT COUNT(*) FROM OtpCode WHERE target=? AND channel='email-ip' AND createdAt>=?) < 10`,
       id,target,await hashOtp(code),new Date(Date.now()+300000).toISOString(),timestamp,target,windowStart,ipHash,windowStart),
     stmt(c,`INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt)
-      SELECT ?,?,'email-ip','rate-limit',?,?,? WHERE changes()=1`,
-      ipMarkerId,ipHash,new Date(Date.now()+900000).toISOString(),timestamp,timestamp)
+      SELECT ?,?,'email-ip','rate-limit',?,?,?
+      WHERE EXISTS(SELECT 1 FROM OtpCode WHERE id=? AND channel='email')`,
+      ipMarkerId,ipHash,new Date(Date.now()+900000).toISOString(),timestamp,timestamp,id)
   ]);
   if(Number(writes[0]?.meta?.changes||0)!==1) return fail(c,429,'تعداد درخواست‌ها از حد مجاز ایمیل یا شبکه بیشتر است؛ ۱۵ دقیقه دیگر تلاش کنید');
   try {
