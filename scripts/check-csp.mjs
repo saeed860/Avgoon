@@ -13,7 +13,7 @@ await walk(root);
 const failures = [];
 for (const file of htmlFiles) {
   const html = await readFile(file, 'utf8');
-  if (/\son(?:click|input|change|submit|error|load|keydown|keyup)\s*=/i.test(html)) failures.push(\`${file}: inline event handler\`);
+  if (/\\son[a-z][a-z0-9_-]*\\s*=/i.test(html)) failures.push(\`${file}: inline event handler\`);
 }
 const headers = await readFile(path.join(root, '_headers'), 'utf8');
 for (const line of headers.split(/\r?\n/).filter(x => /Content-Security-Policy(?:-Report-Only)?:/i.test(x))) {
