@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 
 const worker = await readFile(new URL('../src/index.ts', import.meta.url), 'utf8');
 const page = await readFile(new URL('../../../docs/sales-report.html', import.meta.url), 'utf8');
@@ -37,4 +38,9 @@ test('report page requires an existing session and provides CSV export', () => {
   assert.match(script, /textContent=/);
   assert.match(script, /text\/csv;charset=utf-8/);
   assert.match(script, /revokeObjectURL/);
+});
+
+test('sales report browser script has valid JavaScript syntax', () => {
+  const result = spawnSync(process.execPath, ['--check', new URL('../../../docs/js/sales-report.js', import.meta.url).pathname], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || 'sales report script syntax check failed');
 });
