@@ -293,7 +293,7 @@ app.patch('/api/me/addresses/:id',requireUser,async c=>{
   if(!current)return fail(c,404,'نشانی پیدا نشد');
   const values=[p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,p.data.latitude??null,p.data.longitude??null,p.data.isDefault===undefined?Number(current.isDefault):p.data.isDefault?1:0,time,id,user.id];
   const update=stmt(c,'UPDATE Address SET recipientName=?,phone=?,province=?,city=?,postalCode=?,address=?,latitude=?,longitude=?,isDefault=?,updatedAt=? WHERE id=? AND userId=?',...values);
-  if(values[6]===1){
+  if(values[8]===1){
     await c.env.DB.batch([stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1 AND EXISTS(SELECT 1 FROM Address WHERE id=? AND userId=?)',time,user.id,id,user.id),update]);
   }else{
     await c.env.DB.batch([update,stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=(SELECT id FROM Address WHERE userId=? AND id<>? ORDER BY createdAt,id LIMIT 1) AND NOT EXISTS(SELECT 1 FROM Address WHERE userId=? AND isDefault=1)',time,user.id,id,user.id)]);
