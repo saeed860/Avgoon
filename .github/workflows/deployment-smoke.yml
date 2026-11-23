@@ -32,7 +32,10 @@ jobs:
           from pathlib import Path
           import re
           html = Path('docs/index.html').read_text(encoding='utf-8')
-          scripts = [x for x in re.findall(r'<script\\b[^>]*>(.*?)</script>', html, flags=re.I|re.S) if x.strip()]
+          scripts = [x for x in re.findall(r'<script\b[^>]*>(.*?)</script>', html, flags=re.I|re.S) if x.strip()]
+          if not scripts:
+              raise SystemExit('No inline storefront JavaScript found')
+          print('Inline storefront scripts:', len(scripts))
           Path('/tmp/avgoon-store-inline.js').write_text('\\n'.join(scripts), encoding='utf-8')
           PY
           node --check /tmp/avgoon-store-inline.js
