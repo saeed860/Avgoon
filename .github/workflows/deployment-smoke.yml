@@ -126,9 +126,9 @@ jobs:
           echo "Pages storefront, product editor, Excel import and first-admin setup PASS"
           node - <<'NODE'
           const fs = require('fs');
-          const html = fs.readFileSync('/tmp/store.html','utf8');
-          const safeAddCart = html.includes('addCart(&quot;${esc(p.id)}&quot;)');
-          if (!safeAddCart || !html.includes("qty('${esc(p.id)}',-1)")) {
+          const js = fs.readFileSync('/tmp/storefront.js','utf8');
+          const safeAddCart = js.includes('addCart(&quot;${esc(p.id)}&quot;)');
+          if (!safeAddCart || !js.includes("qty('${esc(p.id)}',-1)")) {
             throw new Error('UUID product IDs are not quoted in cart actions');
           }
           console.log('UUID cart action quoting PASS');
