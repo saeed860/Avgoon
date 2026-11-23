@@ -99,16 +99,22 @@ app.post('/api/inquiries',async c=>{
   if(!/^\+?[0-9]{8,15}$/.test(phone))return fail(c,400,'شماره تماس معتبر نیست');
   const ip=c.req.header('CF-Connecting-IP')||'unknown';
   const ipHash=await hashKey(ip,c.env.JWT_SECRET);
-  const since=new Date(Date.now()-3600000).toISOString();
+  const windowStart=new Date(Date.now()-3600000).toISOString();
   const retention=new Date(Date.now()-86400000).toISOString();
   await stmt(c,"DELETE FROM OtpCode WHERE channel='inquiry' AND createdAt<?",retention).run();
-  const recent=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='inquiry' AND createdAt>?",ipHash,since).first<any>();
-  if((recent?.n||0)>=5)return fail(c,429,'تعداد درخواست‌ها بیش از حد مجاز است؛ یک ساعت دیگر تلاش کنید');
-  const timestamp=now();
-  await stmt(c,"INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt) VALUES(?,?,'inquiry','rate-limit',?,?,?)",crypto.randomUUID(),ipHash,new Date(Date.now()+86400000).toISOString(),timestamp,timestamp).run();
-  const id=crypto.randomUUID();
-  await stmt(c,'INSERT INTO ProjectInquiry(id,name,phone,email,projectType,message,status,createdAt,updatedAt) VALUES(?,?,?,?,?,? ,\'NEW\',?,?)',
-    id,p.data.name,phone,p.data.email||null,p.data.projectType||null,p.data.message,timestamp,timestamp).run();
+  const timestamp=now(), markerId=crypto.randomUUID(), id=crypto.randomUUID();
+  // Enforce the per-IP inquiry quota and create the inquiry in one D1 batch transaction.
+  const writes=await c.env.DB.batch([
+    stmt(c,`INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt)
+      SELECT ?,?,'inquiry','rate-limit',?,?,?
+      WHERE (SELECT COUNT(*) FROM OtpCode WHERE target=? AND channel='inquiry' AND createdAt>=?) < 5`,
+      markerId,ipHash,new Date(Date.now()+86400000).toISOString(),timestamp,timestamp,ipHash,windowStart),
+    stmt(c,`INSERT INTO ProjectInquiry(id,name,phone,email,projectType,message,status,createdAt,updatedAt)
+      SELECT ?,?,?,?,?,?,'NEW',?,?
+      WHERE EXISTS(SELECT 1 FROM OtpCode WHERE id=? AND channel='inquiry')`,
+      id,p.data.name,phone,p.data.email||null,p.data.projectType||null,p.data.message,timestamp,timestamp,markerId)
+  ]);
+  if(Number(writes[0]?.meta?.changes||0)!==1)return fail(c,429,'تعداد درخواست‌ها بیش از حد مجاز است؛ یک ساعت دیگر تلاش کنید');
   return c.json({ok:true,id,message:'درخواست مشاوره شما با موفقیت ثبت شد.'},201);
 });
 
