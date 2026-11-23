@@ -94,7 +94,7 @@ jobs:
           grep -q "مشخصات فنی" /tmp/product.html
           grep -q 'src="js/admin.js"' /tmp/admin.html
           grep -q 'src="js/product.js"' /tmp/product.html
-          grep -q "product.html?slug=" /tmp/store.html
+          grep -q "product.html?slug=" /tmp/storefront.js
           echo "Product detail page and specification display PASS"
           echo "Admin response bytes: $(wc -c < /tmp/admin.html)"
           grep -o ".\{0,40\}editProduct.\{0,40\}" /tmp/admin.html | head -3 || true
@@ -119,7 +119,9 @@ jobs:
           echo "Blank product import template PASS"
           echo "Excel import UI PASS"
           curl -fsSL "$WEB/first-admin.html" -o /tmp/first-admin.html
-          grep -q "/api/admin/bootstrap" /tmp/first-admin.html
+          curl -fsSL "$WEB/js/first-admin.js" -o /tmp/first-admin.js
+          grep -q "/api/admin/bootstrap" /tmp/first-admin.js
+          grep -q 'src="js/first-admin.js"' /tmp/first-admin.html
           echo "First admin setup PASS"
           echo "Pages storefront, product editor, Excel import and first-admin setup PASS"
           node - <<'NODE'
