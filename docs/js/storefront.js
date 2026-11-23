@@ -52,6 +52,92 @@ function setAuthChannel(c){authChannel=c;authStep='request';renderAuth()}
 function renderAuth(){document.getElementById('authForm').style.display='block';document.getElementById('accountPanel').style.display='none';document.getElementById('authTabs').style.display='flex';document.getElementById('registerFields').style.display=authMode==='register'?'block':'none';document.getElementById('authTitle').textContent=authMode==='register'?'ایجاد حساب کاربری':'ورود به حساب کاربری';document.getElementById('authDescription').textContent=authMode==='register'?'برای ساخت حساب، نام و راه ارتباطی خود را وارد کنید.':'برای ورود، کد یک‌بارمصرف دریافت کنید.';document.getElementById('loginTab').classList.toggle('active',authMode==='login');document.getElementById('registerTab').classList.toggle('active',authMode==='register');document.getElementById('authChannel').value=authChannel;document.getElementById('authTargetLabel').textContent=authChannel==='phone'?'شماره موبایل *':'آدرس ایمیل *';document.getElementById('authTarget').placeholder=authChannel==='phone'?'۰۹۱۲۱۲۳۴۵۶۷':'name@example.com';document.getElementById('authTarget').type=authChannel==='phone'?'tel':'email';document.getElementById('authTarget').inputMode=authChannel==='phone'?'tel':'email';document.getElementById('authOtpWrap').style.display=authStep==='verify'?'grid':'none';document.getElementById('authAction').textContent=authStep==='verify'?'تأیید کد و ادامه':'دریافت کد تأیید';document.getElementById('authHint').textContent=authStep==='verify'?'کد ۶ رقمی ارسال‌شده را وارد کنید. اعتبار کد ۵ دقیقه است.':'ورود و ثبت‌نام با کد یک‌بارمصرف انجام می‌شود.'}
 function normalizeDigits(s){return String(s||'').replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d))}
 async function runAuth(){if(!API_BASE)return toast('سرویس ورود هنوز به فروشگاه متصل نشده است.');const targetRaw=document.getElementById('authTarget').value.trim(),target=authChannel==='phone'?normalizeDigits(targetRaw).replace(/[\s-]/g,''):targetRaw.toLowerCase();if(authMode==='register'&&!document.getElementById('authName').value.trim())return toast('نام و نام خانوادگی را وارد کنید');if(!target)return toast('شماره موبایل یا ایمیل را وارد کنید');if(authChannel==='phone'&&!/^\+?[0-9]{10,15}$/.test(target))return toast('شماره موبایل معتبر نیست');if(authChannel==='email'&&!/^\S+@\S+\.\S+$/.test(target))return toast('ایمیل معتبر نیست');try{if(authStep==='request'){const r=await fetch(API_BASE+'/api/auth/request-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target,channel:authChannel})});const data=await r.json();if(!r.ok)throw new Error(data.message||'ارسال کد ناموفق بود');authStep='verify';renderAuth();toast('درخواست کد ثبت شد');return}const code=normalizeDigits(document.getElementById('authOtp').value.trim());if(!/^\d{6}$/.test(code))return toast('کد ۶ رقمی را وارد کنید');const payload={target,channel:authChannel,code};if(authMode==='register')payload.name=document.getElementById('authName').value.trim();const r=await fetch(API_BASE+'/api/auth/verify-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await r.json();if(!r.ok)throw new Error(data.message||'تأیید کد ناموفق بود');accountSession={token:data.token,user:data.user,channel:authChannel,target};localStorage.setItem('avgoon_session',JSON.stringify(accountSession));showAccount();toast('با موفقیت وارد حساب شدید')}catch(e){toast(e.message||'ارتباط با سرور برقرار نشد');document.getElementById('authHint').textContent='اتصال سرویس فروشگاه را بررسی کنید؛ نشانی API هنوز پیکربندی نشده است.'}}
-function showAccount(){document.getElementById('authForm').style.display='none';document.getElementById('authTabs').style.display='none';document.getElementById('accountPanel').style.display='block';document.getElementById('authTitle').textContent='حساب کاربری من';document.getElementById('authDescription').textContent='اطلاعات ورود شما';document.getElementById('accountName').value=accountSession?.user?.name||'کاربر آوگون';document.getElementById('accountContact').value=accountSession?.target||'';const b=document.getElementById('accountButton');if(b)b.textContent='حساب من'}
+function showAccount(){document.getElementById('authForm').style.display='none';document.getElementById('authTabs').style.display='none';document.getElementById('accountPanel').style.display='block';document.getElementById('authTitle').textContent='حساب کاربری من';document.getElementById('authDescription').textContent='اطلاعات ورود شما';document.getElementById('accountName').value=accountSession?.user?.name||'کاربر آوگون';document.getElementById('accountContact').value=accountSession?.target||'';const b=document.getElementById('accountButton');if(b)b.textContent='حساب من';loadMyAddresses()}
 function logoutAccount(){accountSession=null;localStorage.removeItem('avgoon_session');document.getElementById('accountButton').textContent='ورود / ثبت‌نام';closeModal('loginModal');toast('از حساب خارج شدید')}
 async function submitConsult(){const name=document.getElementById('cName').value.trim(),phone=document.getElementById('cPhone').value.trim(),message=document.getElementById('cDesc').value.trim(),email=document.getElementById('cEmail').value.trim(),projectType=document.getElementById('cType').value,website=document.getElementById('cWebsite').value,btn=document.getElementById('consultSubmit'),out=document.getElementById('consultResult');if(name.length<2||phone.length<8||message.length<5){out.textContent='نام، شماره تماس و شرح پروژه را کامل کنید.';return}btn.disabled=true;out.textContent='در حال ثبت درخواست…';try{const r=await fetch(API_BASE+'/api/inquiries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,email,projectType,message,website})});const d=await r.json();if(!r.ok)throw Error(d.message||'ثبت درخواست انجام نشد');document.getElementById('cName').value='';document.getElementById('cPhone').value='';document.getElementById('cEmail').value='';document.getElementById('cType').value='';document.getElementById('cDesc').value='';document.getElementById('cWebsite').value='';closeModal('consultModal');toast('درخواست شما ثبت شد؛ کارشناسان آوگون با شما تماس می‌گیرند.')}catch(e){out.textContent=e.message||'ارتباط با سرور برقرار نشد'}finally{btn.disabled=false}}document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal').forEach(x=>x.classList.remove('show'));closeCart()}});renderProducts();updateCart();loadStoreProducts();if(accountSession){document.getElementById('accountButton').textContent='حساب من';(async()=>{try{const r=await fetch(API_BASE+'/api/me',{headers:{Authorization:'Bearer '+accountSession.token}});if(!r.ok)throw Error('SESSION_REFRESH_FAILED');const d=await r.json();if(d.user){accountSession.user=d.user;localStorage.setItem('avgoon_session',JSON.stringify(accountSession));if(d.user.role==='ADMIN'&&!document.getElementById('adminEntry')){const a=document.createElement('a');a.id='adminEntry';a.href='admin.html';a.className='outline';a.textContent='پنل مدیریت';document.querySelector('.actions')?.appendChild(a)}}}catch(e){console.warn('Account role refresh failed',e)}})()}
+
+
+async function accountApi(path,options={}){
+ const response=await fetch(API_BASE+path,{...options,headers:{'Content-Type':'application/json',Authorization:'Bearer '+(accountSession?.token||''),...(options.headers||{})}});
+ const data=await response.json().catch(()=>({}));
+ if(response.status===401){clearExpiredAccountSession();throw Error('نشست شما منقضی شده است؛ دوباره وارد شوید.')}
+ if(!response.ok)throw Error(data.message||'عملیات انجام نشد');
+ return data;
+}
+async function loadMyAddresses(){
+ const box=document.getElementById('addressList');if(!box||!accountSession?.token)return;
+ box.textContent='در حال دریافت نشانی‌ها…';
+ try{
+  const data=await accountApi('/api/me');
+  if(data.user){accountSession.user=data.user;localStorage.setItem('avgoon_session',JSON.stringify(accountSession));document.getElementById('accountName').value=data.user.name||'';}
+  const addresses=data.user?.addresses||[];box.replaceChildren();
+  if(!addresses.length){box.textContent='هنوز نشانی‌ای ثبت نکرده‌اید.';return}
+  for(const address of addresses){
+   const card=document.createElement('article');card.className='notice';card.style.margin='8px 0';
+   const heading=document.createElement('strong');heading.textContent=address.recipientName+(address.isDefault?' · نشانی پیش‌فرض':'');card.append(heading);
+   const detail=document.createElement('p');detail.textContent=[address.phone,address.province,address.city,address.postalCode,address.address].join(' · ');card.append(detail);
+   const actions=document.createElement('div');actions.className='tools';
+   const edit=document.createElement('button');edit.type='button';edit.className='btn light';edit.textContent='ویرایش';edit.addEventListener('click',()=>editAddress(address));
+   actions.append(edit);
+   if(!address.isDefault){const makeDefault=document.createElement('button');makeDefault.type='button';makeDefault.className='btn light';makeDefault.textContent='پیش‌فرض';makeDefault.addEventListener('click',()=>setDefaultAddress(address.id));actions.append(makeDefault)}
+   const remove=document.createElement('button');remove.type='button';remove.className='btn light';remove.textContent='حذف';remove.addEventListener('click',()=>deleteAddress(address.id));actions.append(remove);
+   card.append(actions);box.append(card);
+  }
+ }catch(error){box.textContent=error.message||'دریافت نشانی‌ها ناموفق بود.'}
+}
+function resetAddressForm(){
+ const form=document.getElementById('addressForm');if(!form)return;form.reset();document.getElementById('addressEditId').value='';document.getElementById('addressSave').textContent='ذخیره نشانی';document.getElementById('addressMessage').textContent='';
+}
+function editAddress(address){
+ document.getElementById('addressEditId').value=address.id;
+ document.getElementById('addressRecipient').value=address.recipientName;
+ document.getElementById('addressPhone').value=address.phone;
+ document.getElementById('addressProvince').value=address.province;
+ document.getElementById('addressCity').value=address.city;
+ document.getElementById('addressPostal').value=address.postalCode;
+ document.getElementById('addressDetails').value=address.address;
+ document.getElementById('addressDefault').checked=Boolean(address.isDefault);
+ document.getElementById('addressSave').textContent='ذخیره تغییرات';
+ document.getElementById('addressMessage').textContent='نشانی برای ویرایش در فرم قرار گرفت.';
+ document.getElementById('addressForm').scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function saveAddress(event){
+ event.preventDefault();
+ const id=document.getElementById('addressEditId').value;
+ const payload={
+  recipientName:document.getElementById('addressRecipient').value.trim(),
+  phone:normalizeDigits(document.getElementById('addressPhone').value).replace(/[\\s()-]/g,''),
+  province:document.getElementById('addressProvince').value.trim(),
+  city:document.getElementById('addressCity').value.trim(),
+  postalCode:normalizeDigits(document.getElementById('addressPostal').value).trim(),
+  address:document.getElementById('addressDetails').value.trim(),
+  isDefault:document.getElementById('addressDefault').checked
+ };
+ if(!/^\\+?[0-9]{10,15}$/.test(payload.phone)||!/^\\d{10}$/.test(payload.postalCode)){document.getElementById('addressMessage').textContent='شماره تماس یا کد پستی معتبر نیست.';return}
+ const button=document.getElementById('addressSave');button.disabled=true;
+ try{
+  await accountApi(id?'/api/me/addresses/'+encodeURIComponent(id):'/api/me/addresses',{method:id?'PATCH':'POST',body:JSON.stringify(payload)});
+  resetAddressForm();await loadMyAddresses();toast('نشانی با موفقیت ذخیره شد.');
+ }catch(error){document.getElementById('addressMessage').textContent=error.message||'ذخیره نشانی ناموفق بود.'}
+ finally{button.disabled=false}
+}
+async function setDefaultAddress(id){
+ try{await accountApi('/api/me/addresses/'+encodeURIComponent(id)+'/default',{method:'POST'});await loadMyAddresses();toast('نشانی پیش‌فرض تغییر کرد.')}
+ catch(error){toast(error.message||'تغییر نشانی پیش‌فرض ناموفق بود.')}
+}
+async function deleteAddress(id){
+ if(!confirm('این نشانی حذف شود؟'))return;
+ try{await accountApi('/api/me/addresses/'+encodeURIComponent(id),{method:'DELETE'});resetAddressForm();await loadMyAddresses();toast('نشانی حذف شد.')}
+ catch(error){toast(error.message||'حذف نشانی ناموفق بود.')}
+}
+async function saveAccountName(){
+ const name=document.getElementById('accountName').value.trim();
+ if(name.length<2||name.length>120){toast('نام باید بین ۲ تا ۱۲۰ نویسه باشد.');return}
+ const button=document.getElementById('accountNameSave');button.disabled=true;
+ try{const data=await accountApi('/api/me',{method:'PATCH',body:JSON.stringify({name})});accountSession.user={...(accountSession.user||{}),...data.user};localStorage.setItem('avgoon_session',JSON.stringify(accountSession));toast('نام حساب ذخیره شد.')}
+ catch(error){toast(error.message||'ذخیره نام ناموفق بود.')}
+ finally{button.disabled=false}
+}
+document.getElementById('addressForm')?.addEventListener('submit',saveAddress);
+document.getElementById('addressCancel')?.addEventListener('click',resetAddressForm);
+document.getElementById('accountNameSave')?.addEventListener('click',saveAccountName);
