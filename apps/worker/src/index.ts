@@ -250,7 +250,74 @@ async function requireUser(c:any,next:any){
 app.get('/api/me',requireUser,async c=>{
   const user=c.get('user') as {id:string};
   const row=await stmt(c,'SELECT id,name,email,phone,role,createdAt FROM User WHERE id=?',user.id).first<any>();
-  return row?c.json({user:row}):fail(c,404,'حساب کاربری پیدا نشد');
+  if(!row)return fail(c,404,'حساب کاربری پیدا نشد');
+  const {results:addresses=[]}=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,isDefault,createdAt,updatedAt FROM Address WHERE userId=? ORDER BY isDefault DESC,createdAt DESC',user.id).all<any>();
+  return c.json({user:{...row,addresses}});
+});
+app.patch('/api/me',requireUser,async c=>{
+  const p=z.object({name:z.string().trim().min(2).max(120)}).strict().safeParse(await c.req.json().catch(()=>null));
+  if(!p.success)return fail(c,400,'نام معتبر نیست');
+  const user=c.get('user') as {id:string};
+  const row=await stmt(c,'UPDATE User SET name=? WHERE id=? RETURNING id,name,email,phone,role',p.data.name,user.id).first<any>();
+  return row?c.json({ok:true,user:row}):fail(c,404,'حساب کاربری پیدا نشد');
+});
+const addressSchema=z.object({
+  recipientName:z.string().trim().min(2).max(120),
+  phone:z.string().trim().regex(/^\\+?[0-9]{10,15}$/,'شماره تماس معتبر نیست'),
+  province:z.string().trim().min(2).max(80),
+  city:z.string().trim().min(2).max(80),
+  postalCode:z.string().trim().regex(/^[0-9]{10}$/,'کدپستی باید ۱۰ رقم باشد'),
+  address:z.string().trim().min(8).max(500),
+  isDefault:z.boolean().optional()
+}).strict();
+app.post('/api/me/addresses',requireUser,async c=>{
+  const p=addressSchema.safeParse(await c.req.json().catch(()=>null));
+  if(!p.success)return fail(c,400,'اطلاعات نشانی معتبر نیست');
+  const user=c.get('user') as {id:string},id=crypto.randomUUID(),time=now();
+  const count=await stmt(c,'SELECT COUNT(*) AS total FROM Address WHERE userId=?',user.id).first<any>();
+  const makeDefault=p.data.isDefault===true||Number(count?.total||0)===0;
+  const statements=[];
+  if(makeDefault)statements.push(stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1',time,user.id));
+  statements.push(stmt(c,'INSERT INTO Address(id,userId,recipientName,phone,province,city,postalCode,address,isDefault,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?)',id,user.id,p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,makeDefault?1:0,time,time));
+  try{await c.env.DB.batch(statements)}catch{return fail(c,409,'ثبت نشانی انجام نشد؛ دوباره تلاش کنید');}
+  const address=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,isDefault,createdAt,updatedAt FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  return c.json({ok:true,address},201);
+});
+app.patch('/api/me/addresses/:id',requireUser,async c=>{
+  const p=addressSchema.safeParse(await c.req.json().catch(()=>null));
+  if(!p.success)return fail(c,400,'اطلاعات نشانی معتبر نیست');
+  const user=c.get('user') as {id:string},id=c.req.param('id'),time=now();
+  const current=await stmt(c,'SELECT id,isDefault FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  if(!current)return fail(c,404,'نشانی پیدا نشد');
+  const values=[p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,time,id,user.id];
+  const update=stmt(c,'UPDATE Address SET recipientName=?,phone=?,province=?,city=?,postalCode=?,address=?,updatedAt=? WHERE id=? AND userId=?',...values);
+  if(p.data.isDefault===true){
+    await c.env.DB.batch([stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1',time,user.id),update,stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=? AND userId=?',time,id,user.id)]);
+  }else{
+    await c.env.DB.batch([update,stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=(SELECT id FROM Address WHERE userId=? AND id<>? ORDER BY createdAt,id LIMIT 1) AND NOT EXISTS(SELECT 1 FROM Address WHERE userId=? AND isDefault=1)',time,user.id,id,user.id)]);
+  }
+  const address=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,isDefault,createdAt,updatedAt FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  return c.json({ok:true,address});
+});
+app.post('/api/me/addresses/:id/default',requireUser,async c=>{
+  const user=c.get('user') as {id:string},id=c.req.param('id'),time=now();
+  const owned=await stmt(c,'SELECT id FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  if(!owned)return fail(c,404,'نشانی پیدا نشد');
+  await c.env.DB.batch([
+    stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1',time,user.id),
+    stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=? AND userId=?',time,id,user.id)
+  ]);
+  return c.json({ok:true});
+});
+app.delete('/api/me/addresses/:id',requireUser,async c=>{
+  const user=c.get('user') as {id:string},id=c.req.param('id'),time=now();
+  const owned=await stmt(c,'SELECT id FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  if(!owned)return fail(c,404,'نشانی پیدا نشد');
+  await c.env.DB.batch([
+    stmt(c,'DELETE FROM Address WHERE id=? AND userId=?',id,user.id),
+    stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=(SELECT id FROM Address WHERE userId=? ORDER BY createdAt,id LIMIT 1) AND NOT EXISTS(SELECT 1 FROM Address WHERE userId=? AND isDefault=1)',time,user.id,user.id)
+  ]);
+  return c.json({ok:true});
 });
 app.get('/api/me/orders',requireUser,async c=>{
   const user=c.get('user') as {id:string};
