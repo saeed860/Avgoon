@@ -70,26 +70,48 @@ async function accountApi(path,options={}){
  if(!response.ok)throw Error(data.message||'عملیات انجام نشد');
  return data;
 }
+const LOCAL_ADDRESS_BOOK_KEY='avgoon_local_address_book_v1';
+function localAddressOwner(){return String(accountSession?.user?.id||accountSession?.target||'account')}
+function localAddressModeKey(){return 'avgoon_address_storage_mode_'+encodeURIComponent(localAddressOwner())}
+function isLocalAddressMode(){return localStorage.getItem(localAddressModeKey())==='local'}
+function readLocalAddressBook(){
+ try{const all=JSON.parse(localStorage.getItem(LOCAL_ADDRESS_BOOK_KEY)||'{}');return Array.isArray(all[localAddressOwner()])?all[localAddressOwner()]:[]}
+ catch{return []}
+}
+function writeLocalAddressBook(addresses){
+ const all=(()=>{try{return JSON.parse(localStorage.getItem(LOCAL_ADDRESS_BOOK_KEY)||'{}')}catch{return {}}})();
+ all[localAddressOwner()]=addresses;
+ localStorage.setItem(LOCAL_ADDRESS_BOOK_KEY,JSON.stringify(all));localStorage.setItem(localAddressModeKey(),'local');
+}
+function renderAddressList(box,addresses,localOnly=false){
+ box.replaceChildren();
+ if(localOnly){const note=document.createElement('p');note.className='notice';note.textContent='حالت جایگزین فعال است: نشانی‌ها و نقطه نقشه فقط روی همین مرورگر و دستگاه ذخیره می‌شوند و با حساب شما در دستگاه‌های دیگر همگام نیستند.';box.append(note)}
+ if(!addresses.length){const empty=document.createElement('p');empty.className='muted';empty.textContent='هنوز نشانی‌ای ثبت نکرده‌اید.';box.append(empty);return}
+ for(const address of addresses){
+  const card=document.createElement('article');card.className='notice';card.style.margin='8px 0';
+  const heading=document.createElement('strong');heading.textContent=address.recipientName+(address.isDefault?' · نشانی پیش‌فرض':'');card.append(heading);
+  const detail=document.createElement('p');detail.textContent=[address.phone,address.province,address.city,address.postalCode,address.address].join(' · ');card.append(detail);
+  if(localOnly&&Number.isFinite(Number(address.latitude))&&Number.isFinite(Number(address.longitude))){const coords=document.createElement('small');coords.textContent='موقعیت نقشه: '+Number(address.latitude).toFixed(5)+', '+Number(address.longitude).toFixed(5);card.append(coords)}
+  const actions=document.createElement('div');actions.className='tools';
+  const edit=document.createElement('button');edit.type='button';edit.className='btn light';edit.textContent='ویرایش';edit.addEventListener('click',()=>editAddress(address));actions.append(edit);
+  if(!address.isDefault){const makeDefault=document.createElement('button');makeDefault.type='button';makeDefault.className='btn light';makeDefault.textContent='پیش‌فرض';makeDefault.addEventListener('click',()=>setDefaultAddress(address.id));actions.append(makeDefault)}
+  const remove=document.createElement('button');remove.type='button';remove.className='btn light';remove.textContent='حذف';remove.addEventListener('click',()=>deleteAddress(address.id));actions.append(remove);
+  card.append(actions);box.append(card);
+ }
+}
 async function loadMyAddresses(){
  const box=document.getElementById('addressList');if(!box||!accountSession?.token)return;
+ if(isLocalAddressMode()){renderAddressList(box,readLocalAddressBook(),true);return}
  box.textContent='در حال دریافت نشانی‌ها…';
  try{
   const data=await accountApi('/api/me');
   if(data.user){accountSession.user=data.user;localStorage.setItem('avgoon_session',JSON.stringify(accountSession));document.getElementById('accountName').value=data.user.name||'';}
-  const addresses=data.user?.addresses||[];box.replaceChildren();
-  if(!addresses.length){box.textContent='هنوز نشانی‌ای ثبت نکرده‌اید.';return}
-  for(const address of addresses){
-   const card=document.createElement('article');card.className='notice';card.style.margin='8px 0';
-   const heading=document.createElement('strong');heading.textContent=address.recipientName+(address.isDefault?' · نشانی پیش‌فرض':'');card.append(heading);
-   const detail=document.createElement('p');detail.textContent=[address.phone,address.province,address.city,address.postalCode,address.address].join(' · ');card.append(detail);
-   const actions=document.createElement('div');actions.className='tools';
-   const edit=document.createElement('button');edit.type='button';edit.className='btn light';edit.textContent='ویرایش';edit.addEventListener('click',()=>editAddress(address));
-   actions.append(edit);
-   if(!address.isDefault){const makeDefault=document.createElement('button');makeDefault.type='button';makeDefault.className='btn light';makeDefault.textContent='پیش‌فرض';makeDefault.addEventListener('click',()=>setDefaultAddress(address.id));actions.append(makeDefault)}
-   const remove=document.createElement('button');remove.type='button';remove.className='btn light';remove.textContent='حذف';remove.addEventListener('click',()=>deleteAddress(address.id));actions.append(remove);
-   card.append(actions);box.append(card);
-  }
- }catch(error){box.textContent=error.message||'دریافت نشانی‌ها ناموفق بود.'}
+  renderAddressList(box,data.user?.addresses||[],false);
+ }catch(error){
+  if(!accountSession?.token){box.textContent=error.message||'نشست معتبر نیست.';return}
+  renderAddressList(box,readLocalAddressBook(),true);
+  document.getElementById('addressMessage').textContent='سرویس دفترچه نشانی هنوز در سرور فعال نیست؛ می‌توانید فعلاً نشانی را محلی ذخیره کنید.';
+ }
 }
 let addressMap=null,addressMarker=null,selectedAddressPoint=null;
 function initializeAddressMap(){
@@ -164,19 +186,40 @@ async function saveAddress(event){
  if(!/^\+?[0-9]{10,15}$/.test(payload.phone)||!/^\d{10}$/.test(payload.postalCode)){document.getElementById('addressMessage').textContent='شماره تماس یا کد پستی معتبر نیست.';return}
  const button=document.getElementById('addressSave');button.disabled=true;
  try{
-  await accountApi(id?'/api/me/addresses/'+encodeURIComponent(id):'/api/me/addresses',{method:id?'PATCH':'POST',body:JSON.stringify(payload)});
-  resetAddressForm();await loadMyAddresses();toast('نشانی با موفقیت ذخیره شد.');
- }catch(error){document.getElementById('addressMessage').textContent=error.message||'ذخیره نشانی ناموفق بود.'}
- finally{button.disabled=false}
+  if(isLocalAddressMode()){
+   const addresses=readLocalAddressBook(),record={...payload,id:id||crypto.randomUUID(),latitude:selectedAddressPoint?.latitude??null,longitude:selectedAddressPoint?.longitude??null,createdAt:new Date().toISOString()};
+   const index=addresses.findIndex(item=>item.id===id);
+   if(index>=0)addresses[index]={...addresses[index],...record};else{if(!addresses.length)record.isDefault=true;addresses.push(record)}
+   if(record.isDefault)addresses.forEach(item=>{if(item.id!==record.id)item.isDefault=false});
+   writeLocalAddressBook(addresses);
+  }else{
+   await accountApi(id?'/api/me/addresses/'+encodeURIComponent(id):'/api/me/addresses',{method:id?'PATCH':'POST',body:JSON.stringify(payload)});
+  }
+  resetAddressForm();await loadMyAddresses();toast(isLocalAddressMode()?'نشانی روی همین دستگاه ذخیره شد.':'نشانی با موفقیت ذخیره شد.');
+ }catch(error){
+  if(!accountSession?.token){document.getElementById('addressMessage').textContent=error.message||'نشست معتبر نیست.';return}
+  const addresses=readLocalAddressBook(),record={...payload,id:id||crypto.randomUUID(),latitude:selectedAddressPoint?.latitude??null,longitude:selectedAddressPoint?.longitude??null,createdAt:new Date().toISOString()};
+  const index=addresses.findIndex(item=>item.id===id);
+  if(index>=0)addresses[index]={...addresses[index],...record};else{if(!addresses.length)record.isDefault=true;addresses.push(record)}
+  if(record.isDefault)addresses.forEach(item=>{if(item.id!==record.id)item.isDefault=false});
+  writeLocalAddressBook(addresses);resetAddressForm();await loadMyAddresses();toast('نشانی روی همین دستگاه ذخیره شد؛ همگام‌سازی ابری فعلاً در دسترس نیست.');
+ }finally{button.disabled=false}
 }
 async function setDefaultAddress(id){
- try{await accountApi('/api/me/addresses/'+encodeURIComponent(id)+'/default',{method:'POST'});await loadMyAddresses();toast('نشانی پیش‌فرض تغییر کرد.')}
- catch(error){toast(error.message||'تغییر نشانی پیش‌فرض ناموفق بود.')}
+ try{
+  if(isLocalAddressMode()){
+   const addresses=readLocalAddressBook().map(item=>({...item,isDefault:item.id===id}));writeLocalAddressBook(addresses);
+  }else await accountApi('/api/me/addresses/'+encodeURIComponent(id)+'/default',{method:'POST'});
+  await loadMyAddresses();toast('نشانی پیش‌فرض تغییر کرد.');
+ }catch(error){toast(error.message||'تغییر نشانی پیش‌فرض ناموفق بود.')}
 }
 async function deleteAddress(id){
  if(!confirm('این نشانی حذف شود؟'))return;
- try{await accountApi('/api/me/addresses/'+encodeURIComponent(id),{method:'DELETE'});resetAddressForm();await loadMyAddresses();toast('نشانی حذف شد.')}
- catch(error){toast(error.message||'حذف نشانی ناموفق بود.')}
+ try{
+  if(isLocalAddressMode())writeLocalAddressBook(readLocalAddressBook().filter(item=>item.id!==id));
+  else await accountApi('/api/me/addresses/'+encodeURIComponent(id),{method:'DELETE'});
+  resetAddressForm();await loadMyAddresses();toast('نشانی حذف شد.');
+ }catch(error){toast(error.message||'حذف نشانی ناموفق بود.')}
 }
 async function saveAccountName(){
  const name=document.getElementById('accountName').value.trim();
