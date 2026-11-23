@@ -25,6 +25,19 @@ jobs:
           node scripts/check-csp.mjs
           node --check docs/js/storefront.js
           node --check docs/js/admin.js
+          node --check docs/js/sales-report.js
+          node - <<'NODE'
+          const fs = require('fs');
+          const html = fs.readFileSync('docs/index.html','utf8');
+          const js = fs.readFileSync('docs/js/storefront.js','utf8');
+          const report = fs.readFileSync('docs/sales-report.html','utf8');
+          for (const id of ['addressMap','addressLocate','addressMapLookup','addressMapClear']) {
+            if (!html.includes('id="' + id + '"')) throw new Error('Missing map control: ' + id);
+          }
+          if (!html.includes('leaflet.js') || !js.includes('nominatim.openstreetmap.org/reverse') || !js.includes('latitude:selectedAddressPoint')) throw new Error('Address map integration is incomplete');
+          if (!report.includes('گزارش فروش آوگون')) throw new Error('Sales report page is missing');
+          console.log('Address map and sales report source PASS');
+          NODE
       - name: Verify deployed Worker API and CORS
         env:
           API: https://avgoon-api.i-am-saeed4700.workers.dev

@@ -79,7 +79,7 @@ app.use('/api/*', cors({
     const previewOrigin = /^https:\/\/[a-z0-9-]+\.avgoon-store\.pages\.dev$/.test(origin || '');
     return origin === 'https://avgoon-store.pages.dev' || origin === c.env.WEB_ORIGIN || previewOrigin ? origin : '';
   },
-  allowMethods: ['GET','POST','PATCH','OPTIONS'],
+  allowMethods: ['GET','POST','PATCH','DELETE','OPTIONS'],
   allowHeaders: ['Content-Type','Authorization','Idempotency-Key'], maxAge: 86400
 }));
 app.get('/api/health', c => c.json({ok:true,service:'AVGOON API',runtime:'cloudflare-workers-d1',time:now()}));
@@ -250,7 +250,76 @@ async function requireUser(c:any,next:any){
 app.get('/api/me',requireUser,async c=>{
   const user=c.get('user') as {id:string};
   const row=await stmt(c,'SELECT id,name,email,phone,role,createdAt FROM User WHERE id=?',user.id).first<any>();
-  return row?c.json({user:row}):fail(c,404,'حساب کاربری پیدا نشد');
+  if(!row)return fail(c,404,'حساب کاربری پیدا نشد');
+  const {results:addresses=[]}=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,latitude,longitude,isDefault,createdAt,updatedAt FROM Address WHERE userId=? ORDER BY isDefault DESC,createdAt DESC',user.id).all<any>();
+  return c.json({user:{...row,addresses}});
+});
+app.patch('/api/me',requireUser,async c=>{
+  const p=z.object({name:z.string().trim().min(2).max(120)}).strict().safeParse(await c.req.json().catch(()=>null));
+  if(!p.success)return fail(c,400,'نام معتبر نیست');
+  const user=c.get('user') as {id:string};
+  const row=await stmt(c,'UPDATE User SET name=? WHERE id=? RETURNING id,name,email,phone,role',p.data.name,user.id).first<any>();
+  return row?c.json({ok:true,user:row}):fail(c,404,'حساب کاربری پیدا نشد');
+});
+const addressSchema=z.object({
+  recipientName:z.string().trim().min(2).max(120),
+  phone:z.string().trim().regex(/^\+?[0-9]{10,15}$/,'شماره تماس معتبر نیست'),
+  province:z.string().trim().min(2).max(80),
+  city:z.string().trim().min(2).max(80),
+  postalCode:z.string().trim().regex(/^[0-9]{10}$/,'کدپستی باید ۱۰ رقم باشد'),
+  address:z.string().trim().min(8).max(500),
+  latitude:z.number().min(-90).max(90).nullable().optional(),
+  longitude:z.number().min(-180).max(180).nullable().optional(),
+  isDefault:z.boolean().optional()
+}).strict().refine(v=>(v.latitude==null)===(v.longitude==null),'مختصات نقشه ناقص است');
+app.post('/api/me/addresses',requireUser,async c=>{
+  const p=addressSchema.safeParse(await c.req.json().catch(()=>null));
+  if(!p.success)return fail(c,400,'اطلاعات نشانی معتبر نیست');
+  const user=c.get('user') as {id:string},id=crypto.randomUUID(),time=now();
+  const count=await stmt(c,'SELECT COUNT(*) AS total FROM Address WHERE userId=?',user.id).first<any>();
+  const makeDefault=p.data.isDefault===true||Number(count?.total||0)===0;
+  const statements=[];
+  if(makeDefault)statements.push(stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1',time,user.id));
+  statements.push(stmt(c,'INSERT INTO Address(id,userId,recipientName,phone,province,city,postalCode,address,latitude,longitude,isDefault,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',id,user.id,p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,p.data.latitude??null,p.data.longitude??null,makeDefault?1:0,time,time));
+  try{await c.env.DB.batch(statements)}catch{return fail(c,409,'ثبت نشانی انجام نشد؛ دوباره تلاش کنید');}
+  const address=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,latitude,longitude,isDefault,createdAt,updatedAt FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  return c.json({ok:true,address},201);
+});
+app.patch('/api/me/addresses/:id',requireUser,async c=>{
+  const p=addressSchema.safeParse(await c.req.json().catch(()=>null));
+  if(!p.success)return fail(c,400,'اطلاعات نشانی معتبر نیست');
+  const user=c.get('user') as {id:string},id=c.req.param('id'),time=now();
+  const current=await stmt(c,'SELECT id,isDefault FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  if(!current)return fail(c,404,'نشانی پیدا نشد');
+  const values=[p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,p.data.latitude??null,p.data.longitude??null,p.data.isDefault===undefined?Number(current.isDefault):p.data.isDefault?1:0,time,id,user.id];
+  const update=stmt(c,'UPDATE Address SET recipientName=?,phone=?,province=?,city=?,postalCode=?,address=?,latitude=?,longitude=?,isDefault=?,updatedAt=? WHERE id=? AND userId=?',...values);
+  if(values[8]===1){
+    await c.env.DB.batch([stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1 AND EXISTS(SELECT 1 FROM Address WHERE id=? AND userId=?)',time,user.id,id,user.id),update]);
+  }else{
+    await c.env.DB.batch([update,stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=(SELECT id FROM Address WHERE userId=? AND id<>? ORDER BY createdAt,id LIMIT 1) AND NOT EXISTS(SELECT 1 FROM Address WHERE userId=? AND isDefault=1)',time,user.id,id,user.id)]);
+  }
+  const address=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,latitude,longitude,isDefault,createdAt,updatedAt FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  return c.json({ok:true,address});
+});
+app.post('/api/me/addresses/:id/default',requireUser,async c=>{
+  const user=c.get('user') as {id:string},id=c.req.param('id'),time=now();
+  const owned=await stmt(c,'SELECT id FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  if(!owned)return fail(c,404,'نشانی پیدا نشد');
+  await c.env.DB.batch([
+    stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1 AND EXISTS(SELECT 1 FROM Address WHERE id=? AND userId=?)',time,user.id,id,user.id),
+    stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=? AND userId=?',time,id,user.id)
+  ]);
+  return c.json({ok:true});
+});
+app.delete('/api/me/addresses/:id',requireUser,async c=>{
+  const user=c.get('user') as {id:string},id=c.req.param('id'),time=now();
+  const owned=await stmt(c,'SELECT id FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  if(!owned)return fail(c,404,'نشانی پیدا نشد');
+  await c.env.DB.batch([
+    stmt(c,'DELETE FROM Address WHERE id=? AND userId=?',id,user.id),
+    stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=(SELECT id FROM Address WHERE userId=? ORDER BY createdAt,id LIMIT 1) AND NOT EXISTS(SELECT 1 FROM Address WHERE userId=? AND isDefault=1)',time,user.id,user.id)
+  ]);
+  return c.json({ok:true});
 });
 app.get('/api/me/orders',requireUser,async c=>{
   const user=c.get('user') as {id:string};
@@ -335,6 +404,36 @@ app.get('/api/admin/summary',async c=>{
   const row=await stmt(c,`SELECT (SELECT COUNT(*) FROM User) AS users,(SELECT COUNT(*) FROM "Order") AS orders,(SELECT COUNT(*) FROM "Order" WHERE status='PENDING') AS pendingOrders,(SELECT COALESCE(SUM(totalToman),0) FROM "Order" WHERE status IN ('PAID','PROCESSING','SHIPPED','COMPLETED')) AS paidTotalToman`).first<any>();
   return c.json(row);
 });
+app.get('/api/admin/reports/sales',async c=>{
+  const from=c.req.query('from')||'',to=c.req.query('to')||'';
+  const validDate=(value:string)=>{
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+    const parsed=new Date(value+'T00:00:00.000Z');
+    return !Number.isNaN(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;
+  };
+  if(!validDate(from)||!validDate(to)||from>to)return fail(c,400,'بازه تاریخ معتبر نیست');
+  const span=(Date.parse(to+'T00:00:00Z')-Date.parse(from+'T00:00:00Z'))/86400000;
+  if(span>366)return fail(c,400,'بازه گزارش نمی‌تواند بیشتر از ۳۶۷ روز باشد');
+  const paid="('PAID','PROCESSING','SHIPPED','COMPLETED')";
+  const [{results:summary=[]},{results:daily=[]},{results:statuses=[]}]=await Promise.all([
+    stmt(c,`SELECT COUNT(*) AS orderCount,
+      COALESCE(SUM(CASE WHEN status IN ${paid} THEN 1 ELSE 0 END),0) AS paidOrderCount,
+      COALESCE(SUM(CASE WHEN status IN ${paid} THEN totalToman ELSE 0 END),0) AS paidTotalToman,
+      COALESCE(SUM(CASE WHEN status='PENDING' THEN 1 ELSE 0 END),0) AS pendingCount,
+      COALESCE(SUM(CASE WHEN status='CANCELLED' THEN 1 ELSE 0 END),0) AS cancelledCount
+      FROM "Order" WHERE date(createdAt)>=date(?) AND date(createdAt)<=date(?)`,from,to).all(),
+    stmt(c,`SELECT date(createdAt) AS day,COUNT(*) AS orderCount,
+      COALESCE(SUM(CASE WHEN status IN ${paid} THEN totalToman ELSE 0 END),0) AS paidTotalToman,
+      COALESCE(SUM(CASE WHEN status IN ${paid} THEN 1 ELSE 0 END),0) AS paidOrderCount
+      FROM "Order" WHERE date(createdAt)>=date(?) AND date(createdAt)<=date(?)
+      GROUP BY date(createdAt) ORDER BY day ASC`,from,to).all(),
+    stmt(c,`SELECT status,COUNT(*) AS count,COALESCE(SUM(totalToman),0) AS totalToman
+      FROM "Order" WHERE date(createdAt)>=date(?) AND date(createdAt)<=date(?)
+      GROUP BY status ORDER BY status`,from,to).all()
+  ]);
+  return c.json({from,to,summary:summary[0]||{orderCount:0,paidOrderCount:0,paidTotalToman:0,pendingCount:0,cancelledCount:0},daily,statuses});
+});
+
 app.get('/api/admin/products',async c=>{
   const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||50)),q=(c.req.query('q')||'').trim(),like='%'+q+'%',category=(c.req.query('category')||'').trim(),published=c.req.query('published')||'',stockStatus=c.req.query('stockStatus')||'';
   if(published!==''&&!['0','1'].includes(published))return fail(c,400,'فیلتر وضعیت انتشار نامعتبر است');
