@@ -44,8 +44,9 @@ async function replaceProductImages(c:any, productId:string, images:{url:string;
   await stmt(c,'UPDATE Product SET imageUrl=?,updatedAt=? WHERE id=?',images[0]?.url||null,now(),productId).run();
 }
 
-async function hashKey(value:string) {
-  const digest=await crypto.subtle.digest('SHA-256',enc.encode(value));
+async function hashKey(value:string, secret:string) {
+  const key=await crypto.subtle.importKey('raw',enc.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const digest=await crypto.subtle.sign('HMAC',key,enc.encode(value));
   return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
 }
 
@@ -97,7 +98,7 @@ app.post('/api/inquiries',async c=>{
   const phone=p.data.phone.replace(/[۰-۹]/g,d=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[\s()-]/g,'');
   if(!/^\+?[0-9]{8,15}$/.test(phone))return fail(c,400,'شماره تماس معتبر نیست');
   const ip=c.req.header('CF-Connecting-IP')||'unknown';
-  const ipHash=await hashKey(ip+':'+c.env.JWT_SECRET);
+  const ipHash=await hashKey(ip,c.env.JWT_SECRET);
   const since=new Date(Date.now()-3600000).toISOString();
   const retention=new Date(Date.now()-86400000).toISOString();
   await stmt(c,"DELETE FROM OtpCode WHERE channel='inquiry' AND createdAt<?",retention).run();
@@ -157,17 +158,22 @@ app.post('/api/auth/request-otp', async c => {
   if(channel==='phone') return fail(c,503,'ورود با پیامک هنوز به ارائه‌دهنده پیامک متصل نشده است');
   if(!c.env.RESEND_API_KEY) return fail(c,503,'سرویس ایمیل هنوز پیکربندی نشده است');
   const windowStart=new Date(Date.now()-900000).toISOString();
-  const recent=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='email' AND createdAt>=?",target,windowStart).first<{n:number}>();
-  if((recent?.n||0)>=5) return fail(c,429,'تعداد درخواست‌ها بیش از حد مجاز است؛ بعداً دوباره تلاش کنید');
   const ip=c.req.header('CF-Connecting-IP')||'unknown';
-  const ipHash=await hashKey(ip+':'+c.env.JWT_SECRET);
-  const ipRecent=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='email-ip' AND createdAt>=?",ipHash,windowStart).first<{n:number}>();
-  if((ipRecent?.n||0)>=10) return fail(c,429,'از این شبکه درخواست‌های زیادی ثبت شده است؛ ۱۵ دقیقه دیگر تلاش کنید');
+  const ipHash=await hashKey(ip,c.env.JWT_SECRET);
   const code=randomOtp(), id=crypto.randomUUID(), ipMarkerId=crypto.randomUUID(), timestamp=now();
-  await c.env.DB.batch([
-    stmt(c,'INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,createdAt) VALUES(?,?,?,?,?,?)',id,target,'email',await hashOtp(code),new Date(Date.now()+300000).toISOString(),timestamp),
-    stmt(c,"INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt) VALUES(?,?,'email-ip','rate-limit',?,?,?)",ipMarkerId,ipHash,new Date(Date.now()+900000).toISOString(),timestamp,timestamp)
+  // Enforce both quotas inside the D1 batch transaction to avoid stale COUNT races.
+  const writes=await c.env.DB.batch([
+    stmt(c,`INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,createdAt)
+      SELECT ?,?,'email',?,?,?
+      WHERE (SELECT COUNT(*) FROM OtpCode WHERE target=? AND channel='email' AND createdAt>=?) < 5
+        AND (SELECT COUNT(*) FROM OtpCode WHERE target=? AND channel='email-ip' AND createdAt>=?) < 10`,
+      id,target,await hashOtp(code),new Date(Date.now()+300000).toISOString(),timestamp,target,windowStart,ipHash,windowStart),
+    stmt(c,`INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt)
+      SELECT ?,?,'email-ip','rate-limit',?,?,?
+      WHERE EXISTS(SELECT 1 FROM OtpCode WHERE id=? AND channel='email')`,
+      ipMarkerId,ipHash,new Date(Date.now()+900000).toISOString(),timestamp,timestamp,id)
   ]);
+  if(Number(writes[0]?.meta?.changes||0)!==1) return fail(c,429,'تعداد درخواست‌ها از حد مجاز ایمیل یا شبکه بیشتر است؛ ۱۵ دقیقه دیگر تلاش کنید');
   try {
     const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${c.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:c.env.RESEND_FROM_EMAIL||'آوگون <onboarding@resend.dev>',to:[target],subject:'کد ورود آوگون',text:`کد تأیید ورود شما: ${code}\\nاین کد تا ۵ دقیقه معتبر است.`})});
     if(!response.ok) throw new Error('EMAIL_PROVIDER_ERROR');
