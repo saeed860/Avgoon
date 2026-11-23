@@ -79,7 +79,7 @@ app.use('/api/*', cors({
     const previewOrigin = /^https:\/\/[a-z0-9-]+\.avgoon-store\.pages\.dev$/.test(origin || '');
     return origin === 'https://avgoon-store.pages.dev' || origin === c.env.WEB_ORIGIN || previewOrigin ? origin : '';
   },
-  allowMethods: ['GET','POST','PATCH','OPTIONS'],
+  allowMethods: ['GET','POST','PATCH','DELETE','OPTIONS'],
   allowHeaders: ['Content-Type','Authorization','Idempotency-Key'], maxAge: 86400
 }));
 app.get('/api/health', c => c.json({ok:true,service:'AVGOON API',runtime:'cloudflare-workers-d1',time:now()}));
