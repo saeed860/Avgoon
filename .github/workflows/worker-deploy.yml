@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 95918e1df4335e67e8884812b0260733
     defaults:
       run:
         working-directory: apps/worker
