@@ -6,7 +6,7 @@
   "workers_dev": true,
   "observability": { "enabled": true },
   "vars": {
-    "WEB_ORIGIN": "https://feature-admin-users-orders.avgoon-store.pages.dev"
+    "WEB_ORIGIN": "https://avgoon-store.pages.dev"
   },
   "d1_databases": [
     {
