@@ -17,11 +17,12 @@ const scripts = {
   firstAdmin: read('../../../docs/js/first-admin.js'),
 };
 
-test('strict script policy is introduced in report-only mode without changing enforcement', () => {
+test('enforcing and report-only script policies reject inline scripts and allow Leaflet assets', () => {
   assert.match(headers, /Content-Security-Policy-Report-Only:.*script-src 'self' https:\/\/cdn\.jsdelivr\.net;/);
-  assert.match(headers, /Content-Security-Policy:.*script-src 'self' 'unsafe-inline' https:\/\/cdn\.jsdelivr\.net;/);
+  assert.match(headers, /Content-Security-Policy:.*script-src 'self' https:\/\/cdn\.jsdelivr\.net;/);
+  assert.match(headers, /style-src[^;]*https:\/\/cdn\.jsdelivr\.net/);
+  assert.doesNotMatch(headers.split('Content-Security-Policy:')[1], /script-src[^;]*'unsafe-inline'/);
 });
-
 test('dynamic product, cart, admin and detail images do not use inline error handlers', () => {
   for (const [name, html] of Object.entries(pages)) {
     assert.doesNotMatch(html, /\sonerror\s*=/i, name + ' must not emit inline image error handlers');
