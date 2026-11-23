@@ -65,7 +65,7 @@ app.patch('/api/me/addresses/:id',auth(),async(req,res)=>{
   const parsed=addressSchema.safeParse(req.body);
   if(!parsed.success)return res.status(400).json({ok:false,message:'اطلاعات نشانی معتبر نیست',errors:parsed.error.flatten()});
   const userId=(req as any).user.sub;
-  const current=await prisma.address.findFirst({where:{id:req.params.id,userId}});
+  const current=await prisma.address.findFirst({where:{id:String(req.params.id),userId}});
   if(!current)return fail(res,404,'نشانی پیدا نشد');
   const makeDefault=parsed.data.isDefault===true;
   const address=await prisma.$transaction(async(tx)=>{
@@ -76,7 +76,7 @@ app.patch('/api/me/addresses/:id',auth(),async(req,res)=>{
 });
 app.post('/api/me/addresses/:id/default',auth(),async(req,res)=>{
   const userId=(req as any).user.sub;
-  const current=await prisma.address.findFirst({where:{id:req.params.id,userId}});
+  const current=await prisma.address.findFirst({where:{id:String(req.params.id),userId}});
   if(!current)return fail(res,404,'نشانی پیدا نشد');
   await prisma.$transaction([
     prisma.address.updateMany({where:{userId,isDefault:true},data:{isDefault:false}}),
@@ -86,7 +86,7 @@ app.post('/api/me/addresses/:id/default',auth(),async(req,res)=>{
 });
 app.delete('/api/me/addresses/:id',auth(),async(req,res)=>{
   const userId=(req as any).user.sub;
-  const current=await prisma.address.findFirst({where:{id:req.params.id,userId}});
+  const current=await prisma.address.findFirst({where:{id:String(req.params.id),userId}});
   if(!current)return fail(res,404,'نشانی پیدا نشد');
   await prisma.address.delete({where:{id:current.id}});
   if(current.isDefault){
@@ -98,7 +98,7 @@ app.delete('/api/me/addresses/:id',auth(),async(req,res)=>{
 
 const productSchema=z.object({sku:z.string().min(1),name:z.string().min(2),slug:z.string().min(2),description:z.string().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string()]).optional(),stock:z.number().int().nonnegative().default(0),unit:z.string().default('عدد'),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrl:z.string().url().optional(),isPublished:z.boolean().default(false)});
 app.post('/api/admin/products',auth('ADMIN'),async(req,res)=>{const parsed=productSchema.safeParse(req.body);if(!parsed.success)return res.status(400).json({ok:false,errors:parsed.error.flatten()});const {categorySlug,priceToman,...data}=parsed.data;const p=await prisma.product.create({data:{...data,priceToman:priceToman===undefined?null:BigInt(priceToman),category:categorySlug?{connect:{slug:categorySlug}}:undefined}});res.status(201).json(p)});
-app.patch('/api/admin/products/:id',auth('ADMIN'),async(req,res)=>{const data:any={...req.body};if(data.priceToman!==undefined)data.priceToman=BigInt(data.priceToman);if(data.categorySlug){data.category={connect:{slug:data.categorySlug}};delete data.categorySlug}const p=await prisma.product.update({where:{id:req.params.id},data});res.json(p)});
+app.patch('/api/admin/products/:id',auth('ADMIN'),async(req,res)=>{const data:any={...req.body};if(data.priceToman!==undefined)data.priceToman=BigInt(data.priceToman);if(data.categorySlug){data.category={connect:{slug:data.categorySlug}};delete data.categorySlug}const p=await prisma.product.update({where:{id:String(req.params.id)},data});res.json(p)});
 app.post('/api/admin/products/import',auth('ADMIN'),upload.single('file'),async(req,res)=>{if(!req.file)return fail(res,400,'فایل ارسال نشده است');const wb=XLSX.read(req.file.buffer,{type:'buffer'});const sheet=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json<Record<string,unknown>>(sheet,{defval:''});const errors:any[]=[];let created=0,updated=0;for(let i=0;i<rows.length;i++){const r=rows[i];const get=(...keys:string[])=>{for(const k of keys)if(r[k]!==undefined&&r[k]!=='')return r[k];return undefined};const raw={sku:String(get('sku','SKU','کد کالا')||''),name:String(get('name','نام محصول')||''),slug:String(get('slug','نامک')||String(get('sku','SKU','کد کالا')||'').toLowerCase().replace(/[^a-z0-9-]+/g,'-')),description:String(get('description','توضیحات')||''),priceToman:get('priceToman','قیمت تومان','قیمت'),stock:Number(get('stock','موجودی')||0),unit:String(get('unit','واحد')||'عدد'),brand:String(get('brand','برند')||''),isPublished:String(get('isPublished','انتشار')||'0').toLowerCase()==='1'||String(get('isPublished','انتشار')||'').toLowerCase()==='true'};const parsed=productSchema.safeParse(raw);if(!parsed.success){errors.push({row:i+2,sku:raw.sku,message:'کد کالا، نام یا مقادیر نامعتبر'});continue}const {priceToman,...d}=parsed.data;try{const existing=await prisma.product.findUnique({where:{sku:d.sku}});await prisma.product.upsert({where:{sku:d.sku},create:{...d,priceToman:priceToman?BigInt(priceToman):null},update:{...d,priceToman:priceToman?BigInt(priceToman):null}});existing?updated++:created++}catch(e){errors.push({row:i+2,sku:d.sku,message:'خطا در ثبت؛ احتمالاً نامک تکراری است'})}}res.json({ok:errors.length===0,created,updated,failed:errors.length,errors})});
 app.get('/api/admin/orders',auth('ADMIN'),async(_req,res)=>res.json(await prisma.order.findMany({include:{user:true,items:{include:{product:true}}},orderBy:{createdAt:'desc'},take:100})));
 app.listen(Number(process.env.API_PORT)||4000,()=>console.info(`AVGOON API listening on ${process.env.API_PORT||4000}`));
