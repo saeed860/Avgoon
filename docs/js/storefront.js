@@ -109,6 +109,8 @@ async function loadMyAddresses(){
   renderAddressList(box,data.user?.addresses||[],false);
  }catch(error){
   if(!accountSession?.token){box.textContent=error.message||'نشست معتبر نیست.';return}
+  // Persist the fallback choice immediately so edit/default/delete use the same local store.
+  localStorage.setItem(localAddressModeKey(),'local');
   renderAddressList(box,readLocalAddressBook(),true);
   document.getElementById('addressMessage').textContent='سرویس دفترچه نشانی هنوز در سرور فعال نیست؛ می‌توانید فعلاً نشانی را محلی ذخیره کنید.';
  }
