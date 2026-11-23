@@ -35,8 +35,10 @@ jobs:
             if (!html.includes('id="' + id + '"')) throw new Error('Missing map control: ' + id);
           }
           if (!html.includes('leaflet.js') || !js.includes('nominatim.openstreetmap.org/reverse') || !js.includes('latitude:selectedAddressPoint')) throw new Error('Address map integration is incomplete');
+          const addressFallback = js.slice(js.indexOf('async function loadMyAddresses()'), js.indexOf('let addressMap='));
+          if (!addressFallback.includes("localStorage.setItem(localAddressModeKey(),'local')") || !addressFallback.includes('renderAddressList(box,readLocalAddressBook(),true)')) throw new Error('Local address fallback mode is not persisted after server failure');
           if (!report.includes('گزارش فروش آوگون')) throw new Error('Sales report page is missing');
-          console.log('Address map and sales report source PASS');
+          console.log('Address map, persistent local fallback, and sales report source PASS');
           NODE
       - name: Verify deployed Worker API and CORS
         env:
