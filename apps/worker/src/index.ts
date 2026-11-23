@@ -113,22 +113,6 @@ app.get('/api/categories', async c => {
   const {results=[]}=await stmt(c,'SELECT id,name,slug,description FROM Category ORDER BY name').all();
   return c.json(results);
 });
-app.get('/api/parts/search', async c => {
-  const rawQuery=(c.req.query('q')||'').trim().slice(0,100);
-  const normalizedQuery=rawQuery.toLowerCase().replace(/[^a-z0-9]/g,'');
-  const rawModel=(c.req.query('model')||'').trim().slice(0,40).toLowerCase().replace(/[^a-z0-9]/g,'');
-  const modelMatch=rawModel.match(/^(3512|3516|3406|3408|c15|c18|c9)/);
-  const model=modelMatch?(modelMatch[1].startsWith('c')?modelMatch[1].toUpperCase():modelMatch[1]):'';
-  if(!normalizedQuery&&!model)return fail(c,400,'شماره قطعه یا مدل موتور را وارد کنید');
-  const pattern='%'+normalizedQuery+'%';
-  const modelPattern=model?'%"'+model+'"%':'';
-  const where="(?='' OR normalizedPartNumber LIKE ? OR LOWER(nameEn) LIKE LOWER(?) OR nameFa LIKE ? OR componentGroup LIKE ?) AND (?='' OR engineModels LIKE ?)";
-  const [{results=[]},{results:counts=[]}]=await Promise.all([
-    stmt(c,'SELECT id,partNumber,nameFa,nameEn,componentGroup,engineModels,sourceUrl,sourceTitle,fitmentNote FROM PartReference WHERE '+where+' ORDER BY CASE WHEN normalizedPartNumber=? THEN 0 ELSE 1 END,partNumber LIMIT 60',normalizedQuery,pattern,'%'+rawQuery+'%','%'+rawQuery+'%',pattern,model,modelPattern,normalizedQuery).all<any>(),
-    stmt(c,'SELECT COUNT(*) AS total FROM PartReference WHERE '+where,normalizedQuery,pattern,'%'+rawQuery+'%','%'+rawQuery+'%',pattern,model,modelPattern).all<any>()
-  ]);
-  return c.json({items:results.map((row:any)=>({...row,engineModels:JSON.parse(row.engineModels)})),total:counts[0]?.total||0,query:rawQuery,model,fitmentNotice:'این اطلاعات مرجع عمومی قطعات است؛ سازگاری قطعی با شماره سریال و Arrangement موتور کنترل شود.'});
-});
 app.get('/api/products', async c => {
   const page=Math.max(1,Math.min(10000,Number(c.req.query('page'))||1)), limit=Math.min(60,Math.max(1,Number(c.req.query('limit'))||24));
   const q=(c.req.query('q')||'').trim().slice(0,100), category=(c.req.query('category')||'').trim().slice(0,80);
