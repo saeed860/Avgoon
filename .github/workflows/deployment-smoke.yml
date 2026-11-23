@@ -19,6 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+      - name: Verify source CSP regression
+        run: |
+          node scripts/check-csp.mjs
+          node --check docs/js/storefront.js
+          node --check docs/js/admin.js
       - name: Verify deployed Worker API and CORS
         env:
           API: https://avgoon-api.i-am-saeed4700.workers.dev
@@ -59,6 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL "$WEB/" -o /tmp/store.html
+          curl -fsSL "$WEB/js/storefront.js" -o /tmp/storefront.js
           curl -fsSI "$WEB/" -D /tmp/page.headers -o /dev/null
           grep -qi "x-content-type-options: nosniff" /tmp/page.headers
           grep -qi "content-security-policy:" /tmp/page.headers
@@ -68,43 +75,47 @@ jobs:
           grep -q "AVGOON_API_URL" <(curl -fsSL "$WEB/config.js")
           grep -q "checkoutModal" /tmp/store.html
           grep -q "cEmail" /tmp/store.html
-          grep -q "submitConsult" /tmp/store.html
-          grep -q "filterProducts('سازه‌های فلزی')" /tmp/store.html
-          grep -q "filterProducts('عایق‌ها')" /tmp/store.html
-          grep -q "filterProducts('ملزومات اجرا')" /tmp/store.html
+          grep -q "submitConsult" /tmp/storefront.js
+          grep -q 'data-filter="سازه‌های فلزی"' /tmp/store.html
+          grep -q 'data-filter="عایق‌ها"' /tmp/store.html
+          grep -q 'data-filter="ملزومات اجرا"' /tmp/store.html
           grep -q "PL_RKM39_8815.png" /tmp/store.html
           grep -q "media.adeo.com/mkp" /tmp/store.html
-          grep -q "/api/inquiries" /tmp/store.html
-          grep -q "avgoon_products" /tmp/store.html
-          grep -q "DEMO_PRODUCTS" /tmp/store.html
-          grep -q "نمونه نمایشی" /tmp/store.html
-          grep -q "محصول نمایشی قابل سفارش نیست" /tmp/store.html
+          grep -q "/api/inquiries" /tmp/storefront.js
+          grep -q "avgoon_products" /tmp/storefront.js
+          grep -q "DEMO_PRODUCTS" /tmp/storefront.js
+          grep -q "نمونه نمایشی" /tmp/storefront.js
+          grep -q "محصول نمایشی قابل سفارش نیست" /tmp/storefront.js
           grep -q "demoNotice" /tmp/store.html
           echo "Clearly labelled non-orderable demo catalog PASS"
           if grep -q "۰۲۱-۹۱۰۰۴۰۸۰\|info@avgoon.ir" /tmp/store.html; then echo "Unverified placeholder contact data found"; exit 1; fi
-          grep -q "photo-thumbs" /tmp/store.html
-          grep -q "setProductCardImage" /tmp/store.html
+          grep -q "photo-thumbs" /tmp/storefront.js
+          grep -q "setProductCardImage" /tmp/storefront.js
           echo "Storefront HTML PASS"
           curl -fsSL "$WEB/admin.html" -o /tmp/admin.html
+          curl -fsSL "$WEB/js/admin.js" -o /tmp/admin.js
           curl -fsSL "$WEB/product.html" -o /tmp/product.html
-          grep -q "technicalSpecs" /tmp/product.html
+          curl -fsSL "$WEB/js/product.js" -o /tmp/product.js
+          grep -q "technicalSpecs" /tmp/product.js
           grep -q "مشخصات فنی" /tmp/product.html
-          grep -q "product.html?slug=" /tmp/store.html
+          grep -q 'src="js/admin.js"' /tmp/admin.html
+          grep -q 'src="js/product.js"' /tmp/product.html
+          grep -q "product.html?slug=" /tmp/storefront.js
           echo "Product detail page and specification display PASS"
           echo "Admin response bytes: $(wc -c < /tmp/admin.html)"
           grep -o ".\{0,40\}editProduct.\{0,40\}" /tmp/admin.html | head -3 || true
-          grep -q "editProduct" /tmp/admin.html
+          grep -q "editProduct" /tmp/admin.js
           grep -q 'name="robots" content="noindex,nofollow"' /tmp/admin.html
           grep -q "inquiriesPanel" /tmp/admin.html
           grep -q "product-import-guide.html" /tmp/admin.html
           curl -fsSL "$WEB/product-import-guide.html" -o /tmp/product-import-guide.html
           grep -q "categorySlug" /tmp/product-import-guide.html
-          grep -q "loadInquiries" /tmp/admin.html
+          grep -q "loadInquiries" /tmp/admin.js
           grep -q "pImages" /tmp/admin.html
-          grep -q "readProductImages" /tmp/admin.html
+          grep -q "readProductImages" /tmp/admin.js
           grep -q "pGalleryPreview" /tmp/admin.html
           grep -q "pSpecs" /tmp/admin.html
-          grep -q "technicalSpecs" /tmp/admin.html
+          grep -q "technicalSpecs" /tmp/admin.js
           grep -q "گالری چندتصویری" /tmp/product-import-guide.html
           echo "Admin product editor and image gallery PASS"
           grep -q "xlsx.full.min.js" /tmp/admin.html
@@ -114,14 +125,16 @@ jobs:
           echo "Blank product import template PASS"
           echo "Excel import UI PASS"
           curl -fsSL "$WEB/first-admin.html" -o /tmp/first-admin.html
-          grep -q "/api/admin/bootstrap" /tmp/first-admin.html
+          curl -fsSL "$WEB/js/first-admin.js" -o /tmp/first-admin.js
+          grep -q "/api/admin/bootstrap" /tmp/first-admin.js
+          grep -q 'src="js/first-admin.js"' /tmp/first-admin.html
           echo "First admin setup PASS"
           echo "Pages storefront, product editor, Excel import and first-admin setup PASS"
           node - <<'NODE'
           const fs = require('fs');
-          const html = fs.readFileSync('/tmp/store.html','utf8');
-          const safeAddCart = html.includes('addCart(&quot;${esc(p.id)}&quot;)');
-          if (!safeAddCart || !html.includes("qty('${esc(p.id)}',-1)")) {
+          const js = fs.readFileSync('/tmp/storefront.js','utf8');
+          const safeAddCart = js.includes('data-action-click="addCart" data-product-id="${esc(p.id)}"');
+          if (!safeAddCart || !js.includes('data-action-click="qty" data-product-id="${esc(p.id)}" data-delta="-1"')) {
             throw new Error('UUID product IDs are not quoted in cart actions');
           }
           console.log('UUID cart action quoting PASS');
@@ -132,12 +145,11 @@ jobs:
           for filename in ('store.html','admin.html','first-admin.html','product.html'):
               html = Path('/tmp', filename).read_text(encoding='utf-8')
               scripts = [x for x in re.findall(r'<script\b[^>]*>(.*?)</script>', html, flags=re.I|re.S) if x.strip()]
-              Path('/tmp', filename + '.js').write_text('\n'.join(scripts), encoding='utf-8')
               print(filename, 'inline scripts:', len(scripts))
-          if not Path('/tmp/admin.html.js').stat().st_size:
-              raise SystemExit('Admin inline JavaScript was not found')
+              if scripts:
+                  raise SystemExit(f'Unexpected inline JavaScript in {filename}')
           PY
-          for jsfile in /tmp/store.html.js /tmp/admin.html.js /tmp/first-admin.html.js /tmp/product.html.js; do
+          for jsfile in /tmp/storefront.js /tmp/admin.js /tmp/first-admin.js /tmp/product.js; do
             if test -s "$jsfile"; then
               if ! node --check "$jsfile" >/tmp/js-check.log 2>&1; then
                 echo "JavaScript syntax failed: $jsfile"
@@ -147,4 +159,4 @@ jobs:
               fi
             fi
           done
-          echo "Frontend JavaScript syntax PASS"
+          echo "Frontend external JavaScript syntax PASS"
