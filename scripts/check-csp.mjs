@@ -34,15 +34,16 @@ const allHtml = [...htmlSources.values()].join('\n');
 const jsSources = await Promise.all(jsFiles.map(file => readFile(file, 'utf8')));
 const allJs = jsSources.join('\n');
 const delegatedChecks = [
-  ['click', /data-action-click\s*=/, /addEventListener\(['"]click['"]/],
-  ['input', /data-action-input\s*=/, /addEventListener\(['"]input['"]/],
-  ['change', /data-action-change\s*=/, /addEventListener\(['"]change['"]/]
+  ['click', 'data-action-click', "addEventListener('click'"],
+  ['input', 'data-action-input', "addEventListener('input'"],
+  ['change', 'data-action-change', "addEventListener('change'"]
 ];
-for (const [type, actionPattern, listenerPattern] of delegatedChecks) {
-  if (actionPattern.test(allHtml + allJs) && !listenerPattern.test(allJs)) {
+for (const [type, actionMarker, listenerMarker] of delegatedChecks) {
+  if ((allHtml + allJs).includes(actionMarker) && !allJs.includes(listenerMarker)) {
     failures.push('missing delegated ' + type + ' event listener');
   }
 }
+
 if (/\[data-action-overlay\]/.test(allJs) && !/event\.target\s*===\s*overlay/.test(allJs)) {
   failures.push('overlay action lacks backdrop target guard');
 }
