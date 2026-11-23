@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply avgoon-store-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply avgoon-store-db --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply avgoon-store-db --remote",
+    "test": "node --test"
   },
   "dependencies": {
     "hono": "^4.7.2",

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { SignJWT, jwtVerify } from 'jose';
 import { z } from 'zod';
+import { parseCsv } from './csv-parser.js';
 
 type D1Result<T = Record<string, unknown>> = { results: T[]; success: boolean; meta?: Record<string, unknown> };
 type D1Statement = {
@@ -368,20 +369,6 @@ app.post('/api/admin/products',async c=>{
   }catch{return fail(c,409,'کد کالا یا نشانی محصول تکراری است');}
 });
 
-function parseCsv(input:string):string[][] {
-  const rows:string[][]=[]; let row:string[]=[], field='', quoted=false;
-  for(let i=0;i<input.length;i++){
-    const ch=input[i];
-    if(quoted){if(ch==='"'&&input[i+1]==='"'){field+='"';i++;}else if(ch==='"')quoted=false;else field+=ch;}
-    else if(ch==='"')quoted=true;
-    else if(ch===','){row.push(field);field='';}
-    else if(ch==='\n'){row.push(field.replace(/\r$/,''));rows.push(row);row=[];field='';}
-    else field+=ch;
-  }
-  if(quoted)throw new Error('CSV_INVALID_QUOTES');
-  if(field.length||row.length){row.push(field.replace(/\r$/,''));rows.push(row);}
-  return rows;
-}
 const productUpdateSchema=z.object({
   sku:z.string().min(1).max(80).optional(),name:z.string().min(2).max(200).optional(),slug:z.string().min(2).max(220).optional(),
   description:z.string().max(5000).nullable().optional(),priceToman:z.union([z.number().int().nonnegative(),z.string().regex(/^\d+$/),z.null()]).optional(),
