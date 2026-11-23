@@ -13,15 +13,15 @@ await walk(root);
 const failures = [];
 for (const file of htmlFiles) {
   const html = await readFile(file, 'utf8');
-  if (/\\son(?:click|input|change|submit|error|load|keydown|keyup)\\s*=/i.test(html)) failures.push(`${file}: inline event handler`);
+  if (/\son(?:click|input|change|submit|error|load|keydown|keyup)\s*=/i.test(html)) failures.push(\`${file}: inline event handler\`);
 }
 const headers = await readFile(path.join(root, '_headers'), 'utf8');
-for (const line of headers.split(/\\r?\\n/).filter(x => /Content-Security-Policy(?:-Report-Only)?:/i.test(x))) {
+for (const line of headers.split(/\r?\n/).filter(x => /Content-Security-Policy(?:-Report-Only)?:/i.test(x))) {
   const scriptSrc = line.match(/script-src([^;]*)/i)?.[1] || '';
   if (/'unsafe-inline'/i.test(scriptSrc)) failures.push('docs/_headers: unsafe-inline remains in script-src');
 }
 if (failures.length) {
-  console.error(failures.join('\\n'));
+  console.error(failures.join('\n'));
   process.exit(1);
 }
-console.log(`CSP regression PASS: ${htmlFiles.length} HTML pages have no inline event handlers; script-src excludes unsafe-inline.`);
+console.log(\`CSP regression PASS: ${htmlFiles.length} HTML pages have no inline event handlers; script-src excludes unsafe-inline.\`);
