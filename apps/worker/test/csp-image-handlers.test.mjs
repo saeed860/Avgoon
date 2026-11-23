@@ -23,3 +23,21 @@ test('dynamic product, cart, admin and detail images do not use inline error han
   assert.match(product, /data-hide-on-error="true"/);
   assert.match(product, /getElementById\('mainImage'\)\?\.addEventListener\('error'/);
 });
+
+const firstAdmin = readFileSync(new URL('../../../docs/first-admin.html', import.meta.url), 'utf8');
+
+test('application pages load executable code from same-origin external scripts', () => {
+  for (const [name, html] of [
+    ['storefront', storefront],
+    ['admin', admin],
+    ['product', product],
+    ['first-admin', firstAdmin],
+  ]) {
+    assert.doesNotMatch(
+      html,
+      /<script\\b(?![^>]*\\bsrc\\s*=)[^>]*>[\\s\\S]*?\\S[\\s\\S]*?<\\/script>/i,
+      name + ' must not contain inline executable scripts',
+    );
+    assert.match(html, /<script\\b[^>]*\\bsrc="js\\//i, name + ' must load a same-origin external script');
+  }
+});
