@@ -58,6 +58,21 @@ jobs:
             curl -fsS "$API/api/parts/search?model=$model" -o "/tmp/cat-$model.json"
             node -e "const d=require('/tmp/cat-$model.json'); if(!Array.isArray(d.items)||!d.items.length) process.exit(1); console.log('$model lookup PASS:',d.total)"
           done
+      - name: Verify production storefront CORS and part lookup
+        env:
+          API: https://avgoon-api.i-am-saeed4700.workers.dev
+          WEB: https://avgoon-store.pages.dev
+        run: |
+          set -euo pipefail
+          curl -fsS -X OPTIONS "$API/api/parts/search" -H "Origin: $WEB" -H "Access-Control-Request-Method: GET" -D /tmp/prod-cors.headers -o /dev/null
+          grep -qi "access-control-allow-origin: $WEB" /tmp/prod-cors.headers
+          curl -fsS "$API/api/parts/search?q=6L-4964" -H "Origin: $WEB" -D /tmp/prod-get.headers -o /tmp/prod-part.json
+          grep -qi "access-control-allow-origin: $WEB" /tmp/prod-get.headers
+          node -e "const d=require('/tmp/prod-part.json'); if(!d.items?.some(x=>x.partNumber==='6L-4964')) process.exit(1); console.log('Production-origin CORS and part-number-only search PASS')"
+          curl -fsSL "$WEB/" -o /tmp/production-store.html
+          grep -q 'id="partLookup"' /tmp/production-store.html
+          grep -q 'id="partNumberQuery"' /tmp/production-store.html
+          echo "Production storefront part search UI PASS"
       - name: Verify deployed Worker API and CORS
         env:
           API: https://avgoon-api.i-am-saeed4700.workers.dev
