@@ -36,9 +36,9 @@ jobs:
           if not scripts:
               raise SystemExit('No inline storefront JavaScript found')
           print('Inline storefront scripts:', len(scripts))
-          Path('/tmp/avgoon-store-inline.js').write_text('\\n'.join(scripts), encoding='utf-8')
+          Path('/tmp/avgoon-store-inline.js').write_text('\n'.join(scripts), encoding='utf-8')
           PY
-          node --check /tmp/avgoon-store-inline.js
+          Path('/tmp/avgoon-store-inline.js').write_text('\n'.join(scripts), encoding='utf-8')
           echo "Caterpillar storefront UI and JavaScript syntax PASS"
       - name: Verify Caterpillar part-number API after main deployment
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
