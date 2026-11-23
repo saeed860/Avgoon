@@ -32,14 +32,14 @@ test('address coordinate migration adds nullable, range-checked latitude and lon
 });
 
 test('address API validates phone numbers with optional plus prefix and coordinate pairing', () => {
-  const phone = /^\\+?[0-9]{10,15}$/;
+  const phone = /^\+?[0-9]{10,15}$/;
   assert.equal(phone.test('09123456789'), true);
   assert.equal(phone.test('+4915123456789'), true);
   assert.equal(phone.test('09123 456789'), false);
-  assert.match(worker,/phone:z\\.string\\(\\)\\.trim\\(\\)\\.regex\\(/);
+  assert.ok(worker.includes("phone:z.string().trim().regex(/^\\+?[0-9]{10,15}$/"));
   assert.match(worker,/latitude:z\.number\(\)\.min\(-90\)\.max\(90\)\.nullable\(\)\.optional\(\)/);
   assert.match(worker,/longitude:z\.number\(\)\.min\(-180\)\.max\(180\)\.nullable\(\)\.optional\(\)/);
-  assert.match(worker,/\(v\.latitude==null\)==\=\(v\.longitude==null\)/);
+  assert.match(worker,/\(v\.latitude==null\)==\=(v\.longitude==null)/);
   assert.match(worker,/latitude,longitude,isDefault/);
 });
 
