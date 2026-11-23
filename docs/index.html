@@ -10,7 +10,7 @@
 <section class="section" id="partLookup" style="background:#f5f4f1">
 <div class="wrap">
 <div class="sectionhead"><div><div class="eyebrow">CATERPILLAR PARTS REFERENCE</div><h2>جست‌وجوی پارت‌نامبر کاترپیلار</h2><p>جست‌وجو بر اساس شماره فنی، نام قطعه یا مدل موتور</p></div></div>
-<div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px;display:grid;grid-template-columns:minmax(220px,2fr) minmax(180px,1fr) auto;gap:10px">
+<div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
 <input id="partNumberQuery" type="search" placeholder="مثلاً 6L-4964 یا Water Pump" aria-label="شماره پارت یا نام قطعه" oninput="debouncedPartSearch()" onkeydown="if(event.key==='Enter')searchCatParts()">
 <select id="partEngineModel" aria-label="مدل موتور" onchange="searchCatParts()"><option value="">همه مدل‌های کاترپیلار</option><option value="3512CB">3512C / 3512B</option><option value="3516CB">3516C / 3516B</option><option value="C15">C15</option><option value="C18">C18</option><option value="C9">C9</option><option value="3406">3406</option><option value="3408">3408</option></select>
 <button class="btn" type="button" onclick="searchCatParts()">جست‌وجو</button>
