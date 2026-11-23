@@ -263,7 +263,7 @@ app.patch('/api/me',requireUser,async c=>{
 });
 const addressSchema=z.object({
   recipientName:z.string().trim().min(2).max(120),
-  phone:z.string().trim().regex(/^\\+?[0-9]{10,15}$/,'شماره تماس معتبر نیست'),
+  phone:z.string().trim().regex(/^\+?[0-9]{10,15}$/,'شماره تماس معتبر نیست'),
   province:z.string().trim().min(2).max(80),
   city:z.string().trim().min(2).max(80),
   postalCode:z.string().trim().regex(/^[0-9]{10}$/,'کدپستی باید ۱۰ رقم باشد'),
