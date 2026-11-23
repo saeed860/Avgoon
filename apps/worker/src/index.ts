@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { SignJWT, jwtVerify } from 'jose';
 import { z } from 'zod';
 import { parseCsv } from './csv-parser.js';
+import { isValidTomanPrice } from './csv-import-validation.js';
 
 type D1Result<T = Record<string, unknown>> = { results: T[]; success: boolean; meta?: Record<string, unknown> };
 type D1Statement = {
@@ -172,7 +173,11 @@ app.post('/api/auth/verify-otp', async c => {
   if(channel==='phone') return fail(c,503,'ورود با پیامک هنوز فعال نشده است');
   const record=await stmt(c,"SELECT id,codeHash,attempts FROM OtpCode WHERE target=? AND channel=? AND consumedAt IS NULL AND expiresAt>? AND attempts<5 ORDER BY createdAt DESC LIMIT 1",target,channel,now()).first<any>();
   if(!record) return fail(c,400,'کد منقضی شده یا وجود ندارد');
-  if(!await verifyOtp(code,record.codeHash)){await stmt(c,'UPDATE OtpCode SET attempts=attempts+1 WHERE id=?',record.id).run();return fail(c,400,'کد تأیید اشتباه است');}
+  if(!await verifyOtp(code,record.codeHash)){
+    const attempt=await stmt(c,'UPDATE OtpCode SET attempts=attempts+1 WHERE id=? AND consumedAt IS NULL AND expiresAt>? AND attempts<5 RETURNING attempts',record.id,now()).first<any>();
+    if(!attempt)return fail(c,409,'تعداد تلاش مجاز تمام شده یا کد دیگر معتبر نیست');
+    return fail(c,400,'کد تأیید اشتباه است');
+  }
   const consumed=await stmt(c,'UPDATE OtpCode SET consumedAt=? WHERE id=? AND consumedAt IS NULL AND attempts<5 RETURNING id',now(),record.id).first<any>();
   if(!consumed)return fail(c,409,'این کد قبلاً استفاده شده است؛ کد تازه دریافت کنید');
   const userId=crypto.randomUUID();
@@ -418,7 +423,7 @@ app.post('/api/admin/products/import-csv',async c=>{
     const get=(key:string)=>{const idx=headers.findIndex(h=>aliases[key].includes(h));return idx<0?'':(rows[i][idx]||'').trim();};
     const imageUrls=[...new Set([get('imageUrl'),...get('imageUrls').split(/[|;]/)].map(v=>v.trim()).filter(Boolean))];
     const raw={sku:get('sku'),name:get('name'),slug:get('slug')||get('sku').toLowerCase().replace(/[^a-z0-9-]+/g,'-'),description:get('description')||undefined,priceToman:get('priceToman')||undefined,stock:Number(get('stock')||0),unit:get('unit')||'عدد',brand:get('brand')||undefined,categorySlug:get('categorySlug')||undefined,imageUrls,isPublished:['1','true','yes','بله'].includes(get('isPublished').toLowerCase())};
-    const p=z.object({sku:z.string().min(1).max(80),name:z.string().min(2).max(200),slug:z.string().min(2).max(220),description:z.string().optional(),priceToman:z.string().regex(/^\\d+$/).optional(),stock:z.number().int().nonnegative(),unit:z.string().min(1).max(30),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrls:z.array(z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد')).max(12),isPublished:z.boolean()}).safeParse(raw);
+    const p=z.object({sku:z.string().min(1).max(80),name:z.string().min(2).max(200),slug:z.string().min(2).max(220),description:z.string().optional(),priceToman:z.string().refine(isValidTomanPrice).optional(),stock:z.number().int().nonnegative(),unit:z.string().min(1).max(30),brand:z.string().optional(),categorySlug:z.string().optional(),imageUrls:z.array(z.string().url().refine(v=>v.startsWith('https://'),'نشانی تصویر باید HTTPS باشد')).max(12),isPublished:z.boolean()}).safeParse(raw);
     if(!p.success){errors.push({row:i+1,sku:raw.sku,message:'اطلاعات ردیف معتبر نیست؛ تصاویر باید HTTPS و حداکثر ۱۲ نشانی باشند'});continue;}
     try{
       const cat=p.data.categorySlug?await stmt(c,'SELECT id FROM Category WHERE slug=?',p.data.categorySlug).first<any>():null;
