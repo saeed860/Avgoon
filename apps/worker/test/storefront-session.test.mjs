@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
-const storefront = readFileSync(resolve(here, '../../../docs/index.html'), 'utf8');
+const storefront = readFileSync(resolve(here, '../../../docs/js/storefront.js'), 'utf8');
 
 test('storefront safely clears malformed persisted sessions', () => {
   assert.match(storefront, /function readAccountSession\(\)\{try\{return JSON\.parse\(localStorage\.getItem\('avgoon_session'\)\|\|'null'\)\}catch\{localStorage\.removeItem\('avgoon_session'\);return null\}\}/);

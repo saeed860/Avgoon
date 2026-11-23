@@ -7,7 +7,8 @@ import { SignJWT, jwtVerify } from 'jose';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const worker = readFileSync(resolve(here, '../src/index.ts'), 'utf8');
-const admin = readFileSync(resolve(here, '../../../docs/admin.html'), 'utf8');
+const admin = readFileSync(resolve(here, '../../../docs/js/admin.js'), 'utf8');
+const adminPage = readFileSync(resolve(here, '../../../docs/admin.html'), 'utf8');
 
 test('API issues short-lived JWTs bound to the Avgoon issuer and audience', async () => {
   assert.match(worker, /setIssuer\('avgoon-api'\)/);
@@ -33,6 +34,6 @@ test('API issues short-lived JWTs bound to the Avgoon issuer and audience', asyn
 test('admin clears expired sessions and exposes an explicit logout action', () => {
   assert.match(admin, /r\.status===401\)\{localStorage\.removeItem\('avgoon_session'\)/);
   assert.match(admin, /function logoutAdmin\(\)\{localStorage\.removeItem\('avgoon_session'\);location\.replace\('index\.html'\)\}/);
-  assert.match(admin, /onclick="logoutAdmin\(\)"/);
+  assert.match(adminPage, /onclick="logoutAdmin\(\)"/);
   assert.match(admin, /catch\{localStorage\.removeItem\('avgoon_session'\);return null\}/);
 });
