@@ -71,15 +71,17 @@ async function accountApi(path,options={}){
  return data;
 }
 const LOCAL_ADDRESS_BOOK_KEY='avgoon_local_address_book_v1';
-const LOCAL_ADDRESS_MODE_KEY='avgoon_address_storage_mode';
+function localAddressOwner(){return String(accountSession?.user?.id||accountSession?.target||'account')}
+function localAddressModeKey(){return 'avgoon_address_storage_mode_'+encodeURIComponent(localAddressOwner())}
+function isLocalAddressMode(){return localStorage.getItem(localAddressModeKey())==='local'}
 function readLocalAddressBook(){
- try{const all=JSON.parse(localStorage.getItem(LOCAL_ADDRESS_BOOK_KEY)||'{}');const owner=String(accountSession?.user?.id||accountSession?.target||'account');return Array.isArray(all[owner])?all[owner]:[]}
+ try{const all=JSON.parse(localStorage.getItem(LOCAL_ADDRESS_BOOK_KEY)||'{}');return Array.isArray(all[localAddressOwner()])?all[localAddressOwner()]:[]}
  catch{return []}
 }
 function writeLocalAddressBook(addresses){
  const all=(()=>{try{return JSON.parse(localStorage.getItem(LOCAL_ADDRESS_BOOK_KEY)||'{}')}catch{return {}}})();
- const owner=String(accountSession?.user?.id||accountSession?.target||'account');all[owner]=addresses;
- localStorage.setItem(LOCAL_ADDRESS_BOOK_KEY,JSON.stringify(all));localStorage.setItem(LOCAL_ADDRESS_MODE_KEY,'local');
+ all[localAddressOwner()]=addresses;
+ localStorage.setItem(LOCAL_ADDRESS_BOOK_KEY,JSON.stringify(all));localStorage.setItem(localAddressModeKey(),'local');
 }
 function renderAddressList(box,addresses,localOnly=false){
  box.replaceChildren();
@@ -99,7 +101,7 @@ function renderAddressList(box,addresses,localOnly=false){
 }
 async function loadMyAddresses(){
  const box=document.getElementById('addressList');if(!box||!accountSession?.token)return;
- if(localStorage.getItem(LOCAL_ADDRESS_MODE_KEY)==='local'){renderAddressList(box,readLocalAddressBook(),true);return}
+ if(isLocalAddressMode()){renderAddressList(box,readLocalAddressBook(),true);return}
  box.textContent='در حال دریافت نشانی‌ها…';
  try{
   const data=await accountApi('/api/me');
@@ -184,7 +186,7 @@ async function saveAddress(event){
  if(!/^\+?[0-9]{10,15}$/.test(payload.phone)||!/^\d{10}$/.test(payload.postalCode)){document.getElementById('addressMessage').textContent='شماره تماس یا کد پستی معتبر نیست.';return}
  const button=document.getElementById('addressSave');button.disabled=true;
  try{
-  if(localStorage.getItem(LOCAL_ADDRESS_MODE_KEY)==='local'){
+  if(isLocalAddressMode()){
    const addresses=readLocalAddressBook(),record={...payload,id:id||crypto.randomUUID(),latitude:selectedAddressPoint?.latitude??null,longitude:selectedAddressPoint?.longitude??null,createdAt:new Date().toISOString()};
    const index=addresses.findIndex(item=>item.id===id);
    if(index>=0)addresses[index]={...addresses[index],...record};else{if(!addresses.length)record.isDefault=true;addresses.push(record)}
@@ -193,7 +195,7 @@ async function saveAddress(event){
   }else{
    await accountApi(id?'/api/me/addresses/'+encodeURIComponent(id):'/api/me/addresses',{method:id?'PATCH':'POST',body:JSON.stringify(payload)});
   }
-  resetAddressForm();await loadMyAddresses();toast(localStorage.getItem(LOCAL_ADDRESS_MODE_KEY)==='local'?'نشانی روی همین دستگاه ذخیره شد.':'نشانی با موفقیت ذخیره شد.');
+  resetAddressForm();await loadMyAddresses();toast(isLocalAddressMode()?'نشانی روی همین دستگاه ذخیره شد.':'نشانی با موفقیت ذخیره شد.');
  }catch(error){
   if(!accountSession?.token){document.getElementById('addressMessage').textContent=error.message||'نشست معتبر نیست.';return}
   const addresses=readLocalAddressBook(),record={...payload,id:id||crypto.randomUUID(),latitude:selectedAddressPoint?.latitude??null,longitude:selectedAddressPoint?.longitude??null,createdAt:new Date().toISOString()};
@@ -205,7 +207,7 @@ async function saveAddress(event){
 }
 async function setDefaultAddress(id){
  try{
-  if(localStorage.getItem(LOCAL_ADDRESS_MODE_KEY)==='local'){
+  if(isLocalAddressMode()){
    const addresses=readLocalAddressBook().map(item=>({...item,isDefault:item.id===id}));writeLocalAddressBook(addresses);
   }else await accountApi('/api/me/addresses/'+encodeURIComponent(id)+'/default',{method:'POST'});
   await loadMyAddresses();toast('نشانی پیش‌فرض تغییر کرد.');
@@ -214,7 +216,7 @@ async function setDefaultAddress(id){
 async function deleteAddress(id){
  if(!confirm('این نشانی حذف شود؟'))return;
  try{
-  if(localStorage.getItem(LOCAL_ADDRESS_MODE_KEY)==='local')writeLocalAddressBook(readLocalAddressBook().filter(item=>item.id!==id));
+  if(isLocalAddressMode())writeLocalAddressBook(readLocalAddressBook().filter(item=>item.id!==id));
   else await accountApi('/api/me/addresses/'+encodeURIComponent(id),{method:'DELETE'});
   resetAddressForm();await loadMyAddresses();toast('نشانی حذف شد.');
  }catch(error){toast(error.message||'حذف نشانی ناموفق بود.')}
