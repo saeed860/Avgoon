@@ -31,7 +31,6 @@ test('dynamic product, cart, admin and detail images do not use inline error han
   assert.match(scripts.admin, /\[data-dim-on-error\].*addEventListener\('error'/);
   assert.match(scripts.product, /getElementById\('mainImage'\)\?\.addEventListener\('error'/);
 });
-
 test('application pages load executable code from same-origin external scripts', () => {
   for (const [name, html] of Object.entries(pages)) {
     assert.doesNotMatch(html, /<script\b(?![^>]*\bsrc\s*=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i,
