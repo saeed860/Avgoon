@@ -305,6 +305,29 @@ app.get('/api/admin/summary',async c=>{
   const row=await stmt(c,`SELECT (SELECT COUNT(*) FROM User) AS users,(SELECT COUNT(*) FROM "Order") AS orders,(SELECT COUNT(*) FROM "Order" WHERE status='PENDING') AS pendingOrders,(SELECT COALESCE(SUM(totalToman),0) FROM "Order" WHERE status IN ('PAID','PROCESSING','SHIPPED','COMPLETED')) AS paidTotalToman`).first<any>();
   return c.json(row);
 });
+app.get('/api/admin/reports/sales',async c=>{
+  const from=c.req.query('from')||'',to=c.req.query('to')||'';
+  const validDate=(v:string)=>/^\\d{4}-\\d{2}-\\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+  if(!validDate(from)||!validDate(to)||from>to)return fail(c,400,'بازه تاریخ معتبر نیست');
+  const paid="('PAID','PROCESSING','SHIPPED','COMPLETED')";
+  const [{results:summary=[]},{results:daily=[]},{results:statuses=[]}]=await Promise.all([
+    stmt(c,`SELECT COUNT(*) AS orderCount,
+      COALESCE(SUM(CASE WHEN status IN ${paid} THEN 1 ELSE 0 END),0) AS paidOrderCount,
+      COALESCE(SUM(CASE WHEN status IN ${paid} THEN totalToman ELSE 0 END),0) AS paidTotalToman,
+      COALESCE(SUM(CASE WHEN status='PENDING' THEN 1 ELSE 0 END),0) AS pendingCount,
+      COALESCE(SUM(CASE WHEN status='CANCELLED' THEN 1 ELSE 0 END),0) AS cancelledCount
+      FROM "Order" WHERE date(createdAt)>=date(?) AND date(createdAt)<=date(?)`,from,to).all(),
+    stmt(c,`SELECT date(createdAt) AS day,COUNT(*) AS orderCount,
+      COALESCE(SUM(CASE WHEN status IN ${paid} THEN totalToman ELSE 0 END),0) AS paidTotalToman,
+      COALESCE(SUM(CASE WHEN status IN ${paid} THEN 1 ELSE 0 END),0) AS paidOrderCount
+      FROM "Order" WHERE date(createdAt)>=date(?) AND date(createdAt)<=date(?)
+      GROUP BY date(createdAt) ORDER BY day ASC`,from,to).all(),
+    stmt(c,`SELECT status,COUNT(*) AS count,COALESCE(SUM(totalToman),0) AS totalToman
+      FROM "Order" WHERE date(createdAt)>=date(?) AND date(createdAt)<=date(?)
+      GROUP BY status ORDER BY status`,from,to).all()
+  ]);
+  return c.json({from,to,summary:summary[0]||{orderCount:0,paidOrderCount:0,paidTotalToman:0,pendingCount:0,cancelledCount:0},daily,statuses});
+});
 app.get('/api/admin/products',async c=>{
   const page=Math.max(1,Number(c.req.query('page'))||1),limit=Math.min(100,Math.max(1,Number(c.req.query('limit'))||50)),q=(c.req.query('q')||'').trim(),like='%'+q+'%',category=(c.req.query('category')||'').trim(),published=c.req.query('published')||'',stockStatus=c.req.query('stockStatus')||'';
   if(published!==''&&!['0','1'].includes(published))return fail(c,400,'فیلتر وضعیت انتشار نامعتبر است');
