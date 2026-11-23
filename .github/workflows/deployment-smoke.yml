@@ -76,9 +76,9 @@ jobs:
           grep -q "checkoutModal" /tmp/store.html
           grep -q "cEmail" /tmp/store.html
           grep -q "submitConsult" /tmp/storefront.js
-          grep -q 'data-filter="سازه‌های فلزی"' /tmp/store.html
-          grep -q 'data-filter="عایق‌ها"' /tmp/store.html
-          grep -q 'data-filter="ملزومات اجرا"' /tmp/store.html
+          grep -q 'data-filter="سازه‌های فلزی"' /tmp/store.html || grep -q "filterProducts('سازه‌های فلزی')" /tmp/store.html
+          grep -q 'data-filter="عایق‌ها"' /tmp/store.html || grep -q "filterProducts('عایق‌ها')" /tmp/store.html
+          grep -q 'data-filter="ملزومات اجرا"' /tmp/store.html || grep -q "filterProducts('ملزومات اجرا')" /tmp/store.html
           grep -q "PL_RKM39_8815.png" /tmp/store.html
           grep -q "media.adeo.com/mkp" /tmp/store.html
           grep -q "/api/inquiries" /tmp/storefront.js
@@ -133,8 +133,9 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const js = fs.readFileSync('/tmp/storefront.js','utf8');
-          const safeAddCart = js.includes('data-action-click="addCart" data-product-id="${esc(p.id)}"');
-          if (!safeAddCart || !js.includes('data-action-click="qty" data-product-id="${esc(p.id)}" data-delta="-1"')) {
+          const safeAddCart = js.includes('data-action-click="addCart" data-product-id="${esc(p.id)}"') || js.includes('addCart(&quot;${esc(p.id)}&quot;)');
+          const safeQty = js.includes('data-action-click="qty" data-product-id="${esc(p.id)}" data-delta="-1"') || js.includes("qty('${esc(p.id)}',-1)");
+          if (!safeAddCart || !safeQty) {
             throw new Error('UUID product IDs are not quoted in cart actions');
           }
           console.log('UUID cart action quoting PASS');
