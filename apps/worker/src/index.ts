@@ -251,7 +251,7 @@ app.get('/api/me',requireUser,async c=>{
   const user=c.get('user') as {id:string};
   const row=await stmt(c,'SELECT id,name,email,phone,role,createdAt FROM User WHERE id=?',user.id).first<any>();
   if(!row)return fail(c,404,'حساب کاربری پیدا نشد');
-  const {results:addresses=[]}=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,isDefault,createdAt,updatedAt FROM Address WHERE userId=? ORDER BY isDefault DESC,createdAt DESC',user.id).all<any>();
+  const {results:addresses=[]}=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,latitude,longitude,isDefault,createdAt,updatedAt FROM Address WHERE userId=? ORDER BY isDefault DESC,createdAt DESC',user.id).all<any>();
   return c.json({user:{...row,addresses}});
 });
 app.patch('/api/me',requireUser,async c=>{
@@ -268,8 +268,10 @@ const addressSchema=z.object({
   city:z.string().trim().min(2).max(80),
   postalCode:z.string().trim().regex(/^[0-9]{10}$/,'کدپستی باید ۱۰ رقم باشد'),
   address:z.string().trim().min(8).max(500),
+  latitude:z.number().min(-90).max(90).nullable().optional(),
+  longitude:z.number().min(-180).max(180).nullable().optional(),
   isDefault:z.boolean().optional()
-}).strict();
+}).strict().refine(v=>(v.latitude==null)===(v.longitude==null),'مختصات نقشه ناقص است');
 app.post('/api/me/addresses',requireUser,async c=>{
   const p=addressSchema.safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return fail(c,400,'اطلاعات نشانی معتبر نیست');
@@ -278,9 +280,9 @@ app.post('/api/me/addresses',requireUser,async c=>{
   const makeDefault=p.data.isDefault===true||Number(count?.total||0)===0;
   const statements=[];
   if(makeDefault)statements.push(stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1',time,user.id));
-  statements.push(stmt(c,'INSERT INTO Address(id,userId,recipientName,phone,province,city,postalCode,address,isDefault,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?)',id,user.id,p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,makeDefault?1:0,time,time));
+  statements.push(stmt(c,'INSERT INTO Address(id,userId,recipientName,phone,province,city,postalCode,address,latitude,longitude,isDefault,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',id,user.id,p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,p.data.latitude??null,p.data.longitude??null,makeDefault?1:0,time,time));
   try{await c.env.DB.batch(statements)}catch{return fail(c,409,'ثبت نشانی انجام نشد؛ دوباره تلاش کنید');}
-  const address=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,isDefault,createdAt,updatedAt FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  const address=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,latitude,longitude,isDefault,createdAt,updatedAt FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
   return c.json({ok:true,address},201);
 });
 app.patch('/api/me/addresses/:id',requireUser,async c=>{
@@ -289,14 +291,14 @@ app.patch('/api/me/addresses/:id',requireUser,async c=>{
   const user=c.get('user') as {id:string},id=c.req.param('id'),time=now();
   const current=await stmt(c,'SELECT id,isDefault FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
   if(!current)return fail(c,404,'نشانی پیدا نشد');
-  const values=[p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,p.data.isDefault===undefined?Number(current.isDefault):p.data.isDefault?1:0,time,id,user.id];
-  const update=stmt(c,'UPDATE Address SET recipientName=?,phone=?,province=?,city=?,postalCode=?,address=?,isDefault=?,updatedAt=? WHERE id=? AND userId=?',...values);
+  const values=[p.data.recipientName,p.data.phone,p.data.province,p.data.city,p.data.postalCode,p.data.address,p.data.latitude??null,p.data.longitude??null,p.data.isDefault===undefined?Number(current.isDefault):p.data.isDefault?1:0,time,id,user.id];
+  const update=stmt(c,'UPDATE Address SET recipientName=?,phone=?,province=?,city=?,postalCode=?,address=?,latitude=?,longitude=?,isDefault=?,updatedAt=? WHERE id=? AND userId=?',...values);
   if(values[6]===1){
     await c.env.DB.batch([stmt(c,'UPDATE Address SET isDefault=0,updatedAt=? WHERE userId=? AND isDefault=1 AND EXISTS(SELECT 1 FROM Address WHERE id=? AND userId=?)',time,user.id,id,user.id),update]);
   }else{
     await c.env.DB.batch([update,stmt(c,'UPDATE Address SET isDefault=1,updatedAt=? WHERE id=(SELECT id FROM Address WHERE userId=? AND id<>? ORDER BY createdAt,id LIMIT 1) AND NOT EXISTS(SELECT 1 FROM Address WHERE userId=? AND isDefault=1)',time,user.id,id,user.id)]);
   }
-  const address=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,isDefault,createdAt,updatedAt FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
+  const address=await stmt(c,'SELECT id,recipientName,phone,province,city,postalCode,address,latitude,longitude,isDefault,createdAt,updatedAt FROM Address WHERE id=? AND userId=?',id,user.id).first<any>();
   return c.json({ok:true,address});
 });
 app.post('/api/me/addresses/:id/default',requireUser,async c=>{
