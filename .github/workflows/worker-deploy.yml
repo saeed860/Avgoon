@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feature/admin-users-orders
     paths:
       - 'apps/worker/**'
       - '.github/workflows/worker-deploy.yml'
