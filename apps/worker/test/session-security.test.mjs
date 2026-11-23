@@ -34,6 +34,7 @@ test('API issues short-lived JWTs bound to the Avgoon issuer and audience', asyn
 test('admin clears expired sessions and exposes an explicit logout action', () => {
   assert.match(admin, /r\.status===401\)\{localStorage\.removeItem\('avgoon_session'\)/);
   assert.match(admin, /function logoutAdmin\(\)\{localStorage\.removeItem\('avgoon_session'\);location\.replace\('index\.html'\)\}/);
-  assert.match(adminPage, /onclick="logoutAdmin\(\)"/);
+  assert.match(adminPage, /data-action-click="logoutAdmin"/);
+  assert.match(admin, /case'logoutAdmin':logoutAdmin\(\)/);
   assert.match(admin, /catch\{localStorage\.removeItem\('avgoon_session'\);return null\}/);
 });
