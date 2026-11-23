@@ -34,9 +34,9 @@ const allHtml = [...htmlSources.values()].join('\n');
 const jsSources = await Promise.all(jsFiles.map(file => readFile(file, 'utf8')));
 const allJs = jsSources.join('\n');
 const delegatedChecks = [
-  ['click', /data-action-click\\s*=/, /addEventListener\\(['"]click['"]/],
-  ['input', /data-action-input\\s*=/, /addEventListener\\(['"]input['"]/],
-  ['change', /data-action-change\\s*=/, /addEventListener\\(['"]change['"]/]
+  ['click', /data-action-click\s*=/, /addEventListener\\(['"]click['"]/],
+  ['input', /data-action-input\s*=/, /addEventListener\\(['"]input['"]/],
+  ['change', /data-action-change\s*=/, /addEventListener\\(['"]change['"]/]
 ];
 for (const [type, actionPattern, listenerPattern] of delegatedChecks) {
   if (actionPattern.test(allHtml + allJs) && !listenerPattern.test(allJs)) {
