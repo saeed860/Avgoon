@@ -110,7 +110,7 @@ jobs:
           grep -q "xlsx.full.min.js" /tmp/admin.html
           curl -fsSL "$WEB/product-import-template.csv" -o /tmp/product-template.csv
           test "$(wc -l < /tmp/product-template.csv)" -eq 1
-          grep -q "^sku,name,slug,description,priceToman,stock,unit,brand,categorySlug,imageUrl,isPublished$" /tmp/product-template.csv
+          grep -q "^sku,name,slug,description,priceToman,stock,unit,brand,categorySlug,imageUrl,imageUrls,isPublished$" /tmp/product-template.csv
           echo "Blank product import template PASS"
           echo "Excel import UI PASS"
           curl -fsSL "$WEB/first-admin.html" -o /tmp/first-admin.html
