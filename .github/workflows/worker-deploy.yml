@@ -30,15 +30,6 @@ jobs:
       - name: Apply additive D1 migrations before Worker deploy
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: npm run db:migrate:remote
-      - name: Apply D1 migrations before Worker deployment
-        if: env.CLOUDFLARE_API_TOKEN != ''
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 95918e1df4335e67e8884812b0260733
-          command: d1 migrations apply avgoon-store-db --remote
-          workingDirectory: apps/worker
-          wranglerVersion: 4.166.0
       - name: Deploy Worker to Cloudflare
         if: env.CLOUDFLARE_API_TOKEN != ''
         uses: cloudflare/wrangler-action@v3
