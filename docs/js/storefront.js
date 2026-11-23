@@ -152,7 +152,7 @@ async function saveAddress(event){
  const id=document.getElementById('addressEditId').value;
  const payload={
   recipientName:document.getElementById('addressRecipient').value.trim(),
-  phone:normalizeDigits(document.getElementById('addressPhone').value).replace(/[\\s()-]/g,''),
+  phone:normalizeDigits(document.getElementById('addressPhone').value).replace(/[\s()-]/g,''),
   province:document.getElementById('addressProvince').value.trim(),
   city:document.getElementById('addressCity').value.trim(),
   postalCode:normalizeDigits(document.getElementById('addressPostal').value).trim(),
@@ -161,7 +161,7 @@ async function saveAddress(event){
   longitude:selectedAddressPoint?.longitude??null,
   isDefault:document.getElementById('addressDefault').checked
  };
- if(!/^\\+?[0-9]{10,15}$/.test(payload.phone)||!/^\\d{10}$/.test(payload.postalCode)){document.getElementById('addressMessage').textContent='شماره تماس یا کد پستی معتبر نیست.';return}
+ if(!/^\+?[0-9]{10,15}$/.test(payload.phone)||!/^\d{10}$/.test(payload.postalCode)){document.getElementById('addressMessage').textContent='شماره تماس یا کد پستی معتبر نیست.';return}
  const button=document.getElementById('addressSave');button.disabled=true;
  try{
   await accountApi(id?'/api/me/addresses/'+encodeURIComponent(id):'/api/me/addresses',{method:id?'PATCH':'POST',body:JSON.stringify(payload)});
