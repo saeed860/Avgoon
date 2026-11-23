@@ -9,7 +9,6 @@ on:
   push:
     branches:
       - main
-      - feature/admin-users-orders
     paths:
       - 'docs/**'
       - 'apps/worker/**'
@@ -23,7 +22,7 @@ jobs:
       - name: Verify deployed Worker API and CORS
         env:
           API: https://avgoon-api.i-am-saeed4700.workers.dev
-          WEB: https://feature-admin-users-orders.avgoon-store.pages.dev
+          WEB: https://avgoon-store.pages.dev
         run: |
           set -euo pipefail
           for attempt in $(seq 1 12); do
@@ -54,9 +53,9 @@ jobs:
           sms_status=$(curl -sS -o /tmp/sms.json -w "%{http_code}" -X POST "$API/api/auth/request-otp" -H "Content-Type: application/json" --data '{"target":"+4915112345678","channel":"phone"}')
           test "$sms_status" = "503"
           echo "SMS provider readiness PASS (503 until SMS integration)"
-      - name: Verify latest Pages preview
+      - name: Verify production Pages deployment
         env:
-          WEB: https://feature-admin-users-orders.avgoon-store.pages.dev
+          WEB: https://avgoon-store.pages.dev
         run: |
           set -euo pipefail
           curl -fsSL "$WEB/" -o /tmp/store.html
