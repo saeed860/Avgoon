@@ -23,7 +23,6 @@ test('address mutations are scoped to the authenticated owner', () => {
   assert.match(worker, /WHERE id=\? AND userId=\?/);
   assert.match(worker, /WHERE id=\? AND userId=\? RETURNING/);
   assert.match(worker, /WHERE userId=\? AND isDefault=1/);
-  assert.match(worker, /Address_one_default_per_user_idx/);
 });
 
 test('address migration enforces ownership, cascade deletion and one default address', () => {
