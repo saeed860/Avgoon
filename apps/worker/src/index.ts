@@ -213,10 +213,14 @@ app.post('/api/admin/bootstrap',async c=>{
   const p=z.object({token:z.string().min(32).max(512),channel:z.enum(['email','phone']),target:z.string().trim().min(5).max(150)}).safeParse(await c.req.json().catch(()=>null));
   if(!p.success)return fail(c,400,'اطلاعات واردشده معتبر نیست');
   const target=p.data.channel==='email'?p.data.target.toLowerCase():p.data.target.replace(/[\s-]/g,'');
-  const key='bootstrap:'+(c.req.header('CF-Connecting-IP')||'unknown'), cutoff=new Date(Date.now()-3600000).toISOString();
-  const attempts=await stmt(c,"SELECT COUNT(*) AS n FROM OtpCode WHERE target=? AND channel='bootstrap' AND createdAt>?",key,cutoff).first<any>();
-  if((attempts?.n||0)>=5)return fail(c,429,'تعداد تلاش‌های راه‌اندازی بیش از حد مجاز است');
-  await stmt(c,"INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt) VALUES(?,?,'bootstrap','attempt',?,?,?)",crypto.randomUUID(),key,new Date(Date.now()+3600000).toISOString(),now(),now()).run();
+  const ip=c.req.header('CF-Connecting-IP')||'unknown';
+  const key='bootstrap:'+await hashKey(ip,c.env.JWT_SECRET);
+  const cutoff=new Date(Date.now()-3600000).toISOString(), timestamp=now();
+  const attempt=await stmt(c,`INSERT INTO OtpCode(id,target,channel,codeHash,expiresAt,consumedAt,createdAt)
+    SELECT ?,?,'bootstrap','attempt',?,?,?
+    WHERE (SELECT COUNT(*) FROM OtpCode WHERE target=? AND channel='bootstrap' AND createdAt>?) < 5`,
+    crypto.randomUUID(),key,new Date(Date.now()+3600000).toISOString(),timestamp,timestamp,key,cutoff).run();
+  if(Number(attempt.meta?.changes||0)!==1)return fail(c,429,'تعداد تلاش‌های راه‌اندازی بیش از حد مجاز است');
   if(!await sameSecret(p.data.token,c.env.ADMIN_BOOTSTRAP_TOKEN||''))return fail(c,403,'کلید راه‌اندازی معتبر نیست');
   const existing=await stmt(c,"SELECT COUNT(*) AS n FROM User WHERE role='ADMIN'").first<any>();
   if((existing?.n||0)>0)return fail(c,409,'مدیر قبلاً ایجاد شده است؛ راه‌اندازی اولیه بسته شده است');
