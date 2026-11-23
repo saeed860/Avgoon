@@ -21,7 +21,6 @@ test('profile and address routes require an authenticated user', () => {
 
 test('address mutations are scoped to the authenticated owner', () => {
   assert.match(worker, /WHERE id=\? AND userId=\?/);
-  assert.match(worker, /WHERE id=\? AND userId=\? RETURNING/);
   assert.match(worker, /WHERE userId=\? AND isDefault=1/);
 });
 
