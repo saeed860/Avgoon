@@ -33,9 +33,13 @@ for (const line of headers.split(/\r?\n/).filter(x => /Content-Security-Policy(?
 const allHtml = [...htmlSources.values()].join('\n');
 const jsSources = await Promise.all(jsFiles.map(file => readFile(file, 'utf8')));
 const allJs = jsSources.join('\n');
-for (const type of ['click', 'input', 'change']) {
-  if (new RegExp('data-action-' + type + '\\\\s*=').test(allHtml + allJs) &&
-      !new RegExp("addEventListener\\\\(['\\\"]" + type + "['\\\"]").test(allJs)) {
+const delegatedChecks = [
+  ['click', /data-action-click\\s*=/, /addEventListener\\(['"]click['"]/],
+  ['input', /data-action-input\\s*=/, /addEventListener\\(['"]input['"]/],
+  ['change', /data-action-change\\s*=/, /addEventListener\\(['"]change['"]/]
+];
+for (const [type, actionPattern, listenerPattern] of delegatedChecks) {
+  if (actionPattern.test(allHtml + allJs) && !listenerPattern.test(allJs)) {
     failures.push('missing delegated ' + type + ' event listener');
   }
 }
